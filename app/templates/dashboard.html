@@ -1,45 +1,170 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - Janitorial QC{% endblock %}
+{% block title %}Dashboard{% endblock %}
 
 {% block content %}
-<div class="row">
+<div class="row mb-4">
     <div class="col-12">
         <h2>Welcome, {{ current_user.username }}!</h2>
-        <p class="text-muted">Role: {{ current_user.role|title }}</p>
+        <p class="text-muted">
+            <span class="badge bg-{% if current_user.role == 'admin' %}danger{% elif current_user.role == 'supervisor' %}warning{% else %}info{% endif %}">
+                {{ current_user.role|title }}
+            </span>
+        </p>
     </div>
 </div>
 
-<div class="row mt-4">
-    <div class="col-md-3">
-        <div class="card text-white bg-primary mb-3">
+<div class="row">
+    <div class="col-md-3 mb-4">
+        <div class="card text-white bg-primary h-100">
             <div class="card-body">
-                <h5 class="card-title"><i class="bi bi-clipboard-data"></i> Today's Inspections</h5>
-                <p class="card-text display-6">0</p>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-white-50">Today's Inspections</h6>
+                        <h2 class="mb-0">{{ today_inspections }}</h2>
+                    </div>
+                    <div>
+                        <i class="bi bi-clipboard-data" style="font-size: 3rem; opacity: 0.3;"></i>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card text-white bg-success mb-3">
+    
+    <div class="col-md-3 mb-4">
+        <div class="card text-white bg-success h-100">
             <div class="card-body">
-                <h5 class="card-title"><i class="bi bi-check-circle"></i> Completed</h5>
-                <p class="card-text display-6">0</p>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-white-50">Completed Today</h6>
+                        <h2 class="mb-0">{{ completed_today }}</h2>
+                    </div>
+                    <div>
+                        <i class="bi bi-check-circle" style="font-size: 3rem; opacity: 0.3;"></i>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card text-white bg-warning mb-3">
+    
+    <div class="col-md-3 mb-4">
+        <div class="card text-white bg-warning h-100">
             <div class="card-body">
-                <h5 class="card-title"><i class="bi bi-exclamation-triangle"></i> Issues Open</h5>
-                <p class="card-text display-6">0</p>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-white-50">Open Issues</h6>
+                        <h2 class="mb-0">{{ open_issues }}</h2>
+                    </div>
+                    <div>
+                        <i class="bi bi-exclamation-triangle" style="font-size: 3rem; opacity: 0.3;"></i>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card text-white bg-info mb-3">
+    
+    <div class="col-md-3 mb-4">
+        <div class="card text-white bg-info h-100">
             <div class="card-body">
-                <h5 class="card-title"><i class="bi bi-graph-up"></i> Avg Score</h5>
-                <p class="card-text display-6">--</p>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title text-white-50">Avg Score (30d)</h6>
+                        <h2 class="mb-0">{{ avg_score if avg_score else '--' }}%</h2>
+                    </div>
+                    <div>
+                        <i class="bi bi-graph-up" style="font-size: 3rem; opacity: 0.3;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if current_user.role in ['admin', 'supervisor'] %}
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-body text-center">
+                <i class="bi bi-building text-primary" style="font-size: 2.5rem;"></i>
+                <h3 class="mt-2">{{ total_facilities }}</h3>
+                <p class="text-muted mb-0">Active Facilities</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-body text-center">
+                <i class="bi bi-file-earmark-text text-success" style="font-size: 2.5rem;"></i>
+                <h3 class="mt-2">{{ total_templates }}</h3>
+                <p class="text-muted mb-0">Templates</p>
+            </div>
+        </div>
+    </div>
+    {% if current_user.role == 'admin' %}
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-body text-center">
+                <i class="bi bi-people text-warning" style="font-size: 2.5rem;"></i>
+                <h3 class="mt-2">{{ total_users }}</h3>
+                <p class="text-muted mb-0">Users</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Activity</h5>
+            </div>
+            <div class="card-body">
+                {% if recent_inspections %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Date</th>
+                                <th>Facility</th>
+                                <th>Area</th>
+                                <th>Inspector</th>
+                                <th>Score</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for inspection in recent_inspections %}
+                            <tr>
+                                <td>{{ inspection.inspection_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>{{ inspection.facility.name }}</td>
+                                <td>{{ inspection.area.name if inspection.area else 'N/A' }}</td>
+                                <td>{{ inspection.inspector.username }}</td>
+                                <td>
+                                    {% if inspection.overall_score %}
+                                    <span class="badge bg-{% if inspection.overall_score >= 90 %}success{% elif inspection.overall_score >= 70 %}warning{% else %}danger{% endif %}">
+                                        {{ inspection.overall_score }}%
+                                    </span>
+                                    {% else %}
+                                    <span class="text-muted">--</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-{% if inspection.status == 'completed' %}success{% elif inspection.status == 'flagged' %}danger{% else %}secondary{% endif %}">
+                                        {{ inspection.status|title }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info mb-0">
+                    <i class="bi bi-info-circle"></i> No recent inspections to display.
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>

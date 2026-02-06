@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Facilities{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-6">
+        <h2><i class="bi bi-building"></i> Facilities</h2>
+    </div>
+    <div class="col-md-6 text-end">
+        {% if current_user.role in ['admin', 'supervisor'] %}
+        <a href="{{ url_for('facilities.create_facility') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Add Facility
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row">
+    {% for facility in facilities %}
+    <div class="col-md-6 col-lg-4 mb-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <a href="{{ url_for('facilities.view_facility', facility_id=facility.id) }}" class="text-decoration-none">
+                        {{ facility.name }}
+                    </a>
+                    {% if not facility.active %}
+                    <span class="badge bg-secondary">Inactive</span>
+                    {% endif %}
+                </h5>
+                
+                {% if facility.address %}
+                <p class="card-text text-muted small">
+                    <i class="bi bi-geo-alt"></i> {{ facility.address }}
+                </p>
+                {% endif %}
+                
+                <div class="mt-3">
+                    <small class="text-muted">
+                        <i class="bi bi-diagram-3"></i> {{ facility.areas.count() }} areas
+                    </small>
+                </div>
+            </div>
+            <div class="card-footer bg-transparent">
+                <a href="{{ url_for('facilities.view_facility', facility_id=facility.id) }}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-eye"></i> View Details
+                </a>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> No facilities configured yet.
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

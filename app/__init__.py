@@ -6,6 +6,12 @@ from flask_mail import Mail
 from config import config
 import os
 
+import app
+from app.routes import auth, dashboard, inspections, templates, reports, facilities
+
+# Add to blueprint registration
+app.register_blueprint(facilities.bp)
+
 # Initialize extensions
 db = SQLAlchemy()
 login_manager = LoginManager()
