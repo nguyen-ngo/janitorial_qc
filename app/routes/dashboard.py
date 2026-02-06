@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template
 from flask_login import login_required, current_user
+from app import db  # ADD THIS LINE
 from app.models.inspection import Inspection, InspectionTemplate
 from app.models.facility import Facility
 from app.models.issue import Issue
