@@ -1,9 +1,10 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required
+from flask_wtf.csrf import generate_csrf
 from app import db
 from app.models.facility import Facility, Area
 from app.utils.forms import FacilityForm, AreaForm
-from app.utils.decorators import supervisor_required
+from app.utils.decorators import supervisor_required, admin_required
 
 bp = Blueprint('facilities', __name__, url_prefix='/facilities')
 
@@ -11,7 +12,7 @@ bp = Blueprint('facilities', __name__, url_prefix='/facilities')
 @login_required
 def list_facilities():
     facilities = Facility.query.order_by(Facility.name).all()
-    return render_template('facilities/list.html', facilities=facilities)
+    return render_template('facilities/list.html', facilities=facilities, csrf_token=generate_csrf())
 
 @bp.route('/new', methods=['GET', 'POST'])
 @login_required
@@ -41,7 +42,7 @@ def create_facility():
 def view_facility(facility_id):
     facility = Facility.query.get_or_404(facility_id)
     areas = facility.areas.order_by(Area.name).all()
-    return render_template('facilities/view.html', facility=facility, areas=areas)
+    return render_template('facilities/view.html', facility=facility, areas=areas, csrf_token=generate_csrf())
 
 @bp.route('/<int:facility_id>/edit', methods=['GET', 'POST'])
 @login_required
@@ -65,20 +66,19 @@ def edit_facility(facility_id):
 
 @bp.route('/<int:facility_id>/delete', methods=['POST'])
 @login_required
-@supervisor_required
+@admin_required
 def delete_facility(facility_id):
     facility = Facility.query.get_or_404(facility_id)
     
-    # Check if facility has inspections
     if facility.inspections.count() > 0:
-        flash('Cannot delete facility with existing inspections.', 'danger')
+        flash(f'Cannot delete "{facility.name}" — it has existing inspection records.', 'danger')
         return redirect(url_for('facilities.view_facility', facility_id=facility.id))
     
     facility_name = facility.name
     db.session.delete(facility)
     db.session.commit()
     
-    flash(f'Facility "{facility_name}" deleted successfully.', 'success')
+    flash(f'Facility "{facility_name}" has been permanently deleted.', 'success')
     return redirect(url_for('facilities.list_facilities'))
 
 # Area Management Routes
@@ -114,7 +114,6 @@ def edit_area(area_id):
     area = Area.query.get_or_404(area_id)
     form = AreaForm(obj=area)
     
-    # Populate facility choices
     facilities = Facility.query.filter_by(active=True).order_by(Facility.name).all()
     form.facility_id.choices = [(f.id, f.name) for f in facilities]
     
@@ -136,7 +135,6 @@ def delete_area(area_id):
     area = Area.query.get_or_404(area_id)
     facility_id = area.facility_id
     
-    # Check if area has inspections
     if area.inspections.count() > 0:
         flash('Cannot delete area with existing inspections.', 'danger')
         return redirect(url_for('facilities.view_facility', facility_id=facility_id))

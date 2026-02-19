@@ -29,23 +29,34 @@
                     <span class="badge bg-secondary">Inactive</span>
                     {% endif %}
                 </h5>
-                
+
                 {% if facility.address %}
                 <p class="card-text text-muted small">
                     <i class="bi bi-geo-alt"></i> {{ facility.address }}
                 </p>
                 {% endif %}
-                
+
                 <div class="mt-3">
                     <small class="text-muted">
                         <i class="bi bi-diagram-3"></i> {{ facility.areas.count() }} areas
                     </small>
                 </div>
             </div>
-            <div class="card-footer bg-transparent">
+            <div class="card-footer bg-transparent d-flex gap-2">
                 <a href="{{ url_for('facilities.view_facility', facility_id=facility.id) }}" class="btn btn-sm btn-outline-primary">
                     <i class="bi bi-eye"></i> View Details
                 </a>
+                {% if current_user.role == 'admin' %}
+                <button type="button"
+                        class="btn btn-sm btn-outline-danger ms-auto"
+                        data-bs-toggle="modal"
+                        data-bs-target="#deleteModal"
+                        data-facility-id="{{ facility.id }}"
+                        data-facility-name="{{ facility.name }}"
+                        data-inspection-count="{{ facility.inspections.count() }}">
+                    <i class="bi bi-trash"></i> Delete
+                </button>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -57,4 +68,76 @@
     </div>
     {% endfor %}
 </div>
+
+{% if current_user.role == 'admin' %}
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill"></i> Confirm Deletion
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>You are about to permanently delete:</p>
+                <p class="fw-bold fs-5" id="modalFacilityName"></p>
+                <div id="modalWarningBlock" class="alert alert-danger d-none">
+                    <i class="bi bi-x-circle-fill"></i>
+                    <strong>Cannot delete this facility.</strong> It has existing inspection records.
+                    Please remove all associated inspections first.
+                </div>
+                <div id="modalConfirmBlock">
+                    <p class="text-muted mb-0">This action is <strong>irreversible</strong>. All areas associated with this facility will also be deleted.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </button>
+                <form id="deleteFacilityForm" method="POST" action="" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" id="confirmDeleteBtn" class="btn btn-danger">
+                        <i class="bi bi-trash-fill"></i> Delete Permanently
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if current_user.role == 'admin' %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const deleteModal = document.getElementById('deleteModal');
+    deleteModal.addEventListener('show.bs.modal', function (event) {
+        const button = event.relatedTarget;
+        const facilityId = button.getAttribute('data-facility-id');
+        const facilityName = button.getAttribute('data-facility-name');
+        const inspectionCount = parseInt(button.getAttribute('data-inspection-count'));
+
+        document.getElementById('modalFacilityName').textContent = facilityName;
+        document.getElementById('deleteFacilityForm').action = '/facilities/' + facilityId + '/delete';
+
+        const warningBlock = document.getElementById('modalWarningBlock');
+        const confirmBlock = document.getElementById('modalConfirmBlock');
+        const confirmBtn = document.getElementById('confirmDeleteBtn');
+
+        if (inspectionCount > 0) {
+            warningBlock.classList.remove('d-none');
+            confirmBlock.classList.add('d-none');
+            confirmBtn.disabled = true;
+        } else {
+            warningBlock.classList.add('d-none');
+            confirmBlock.classList.remove('d-none');
+            confirmBtn.disabled = false;
+        }
+    });
+});
+</script>
+{% endif %}
 {% endblock %}

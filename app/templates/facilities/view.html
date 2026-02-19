@@ -7,7 +7,7 @@
     <div class="col-md-8">
         <h2><i class="bi bi-building"></i> {{ facility.name }}</h2>
     </div>
-    <div class="col-md-4 text-end">
+    <div class="col-md-4 text-end d-flex gap-2 justify-content-end align-items-start">
         {% if current_user.role in ['admin', 'supervisor'] %}
         <a href="{{ url_for('facilities.edit_facility', facility_id=facility.id) }}" class="btn btn-outline-primary">
             <i class="bi bi-pencil"></i> Edit
@@ -15,6 +15,14 @@
         <a href="{{ url_for('facilities.create_area', facility_id=facility.id) }}" class="btn btn-primary">
             <i class="bi bi-plus-circle"></i> Add Area
         </a>
+        {% endif %}
+        {% if current_user.role == 'admin' %}
+        <button type="button"
+                class="btn btn-danger"
+                data-bs-toggle="modal"
+                data-bs-target="#deleteModal">
+            <i class="bi bi-trash-fill"></i> Delete Facility
+        </button>
         {% endif %}
     </div>
 </div>
@@ -51,7 +59,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-6">
         <div class="card shadow-sm">
             <div class="card-header bg-light">
@@ -103,6 +111,7 @@
                                 <i class="bi bi-pencil"></i>
                             </a>
                             <form method="POST" action="{{ url_for('facilities.delete_area', area_id=area.id) }}" class="d-inline" onsubmit="return confirm('Delete this area?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                 <button type="submit" class="btn btn-sm btn-outline-danger">
                                     <i class="bi bi-trash"></i>
                                 </button>
@@ -121,4 +130,51 @@
         {% endif %}
     </div>
 </div>
+
+{% if current_user.role == 'admin' %}
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill"></i> Confirm Deletion
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>You are about to permanently delete:</p>
+                <p class="fw-bold fs-5">{{ facility.name }}</p>
+                {% if facility.inspections.count() > 0 %}
+                <div class="alert alert-danger mb-0">
+                    <i class="bi bi-x-circle-fill"></i>
+                    <strong>Cannot delete this facility.</strong> It has
+                    <strong>{{ facility.inspections.count() }} inspection record(s)</strong> on file.
+                    Please remove all associated inspections first.
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    This action is <strong>irreversible</strong>. All
+                    <strong>{{ areas|length }} area(s)</strong> associated with this facility will also be deleted.
+                </div>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cancel
+                </button>
+                <form method="POST" action="{{ url_for('facilities.delete_facility', facility_id=facility.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit"
+                            class="btn btn-danger"
+                            {% if facility.inspections.count() > 0 %}disabled{% endif %}>
+                        <i class="bi bi-trash-fill"></i> Delete Permanently
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
