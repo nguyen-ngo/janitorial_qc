@@ -1,132 +1,246 @@
 {% extends "base.html" %}
 
-{% block title %}Edit Template - {{ template.name }}{% endblock %}
+{% block title %}Edit Template — {{ template.name }}{% endblock %}
 
 {% block extra_css %}
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-.checklist-item { cursor: move; }
-.checklist-item:hover { background-color: #f8f9fa; }
+  body { font-family: 'DM Sans', sans-serif; }
+
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1.5rem; gap: 1rem;
+  }
+  .page-title { font-size: 1.3rem; font-weight: 700; color: #0f172a; margin: 0; }
+
+  /* two-column layout */
+  .edit-layout {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  /* left: settings card */
+  .settings-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+    position: sticky;
+    top: 1rem;
+  }
+  .settings-card-header {
+    background: #1a1d23;
+    color: #fff;
+    padding: .85rem 1.25rem;
+    font-weight: 600;
+    font-size: .9rem;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+  }
+  .settings-card-body { padding: 1.25rem; }
+
+  /* right: form canvas preview */
+  .canvas-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .canvas-card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: .85rem 1.25rem;
+    border-bottom: 1px solid #e2e8f0;
+    background: #fafbfc;
+  }
+  .canvas-card-header h6 { margin: 0; font-weight: 700; font-size: .88rem; color: #0f172a; }
+  .canvas-card-body { padding: 1.25rem; overflow-x: auto; }
+
+  /* grid minimap — same constants as editor */
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 72px);
+    grid-auto-rows: 52px;
+    gap: 8px;
+    width: calc(12 * 72px + 11 * 8px);
+  }
+  .fg-cell {
+    overflow: hidden; display: flex; flex-direction: column;
+    background: #f8fafc; border: 1px solid #e2e8f0;
+    border-radius: 8px; padding: .4rem .6rem;
+    cursor: default;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .fg-cell:hover { border-color: #93c5fd; box-shadow: 0 2px 8px rgba(37,99,235,.1); }
+  .fg-cell .fl {
+    font-size: .72rem; font-weight: 600; color: #374151;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    margin-bottom: .15rem;
+  }
+  .fg-cell .ft {
+    font-size: .6rem; font-family: monospace;
+    color: #2563eb; background: #eff6ff;
+    padding: .05rem .28rem; border-radius: 10px;
+    display: inline-block; width: fit-content;
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  .req-dot { color: #dc2626; }
+  .fg-section {
+    border-top: 2px solid #e2e8f0; padding-top: .35rem;
+    display: flex; align-items: center; height: 100%;
+  }
+  .fg-section span { font-weight: 700; font-size: .82rem; color: #374151; }
+
+  /* empty / open-editor CTA */
+  .editor-cta {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 3rem 2rem; text-align: center; color: #94a3b8;
+    gap: .75rem;
+  }
+  .editor-cta i { font-size: 2.2rem; opacity: .3; }
+  .editor-cta p { margin: 0; font-size: .85rem; }
+
+  /* field count badge */
+  .field-count {
+    font-size: .72rem; font-weight: 600;
+    background: #eff6ff; color: #2563eb;
+    padding: .2rem .6rem; border-radius: 20px;
+  }
+
+  /* open editor banner */
+  .editor-banner {
+    margin: 1rem 1.25rem 0;
+    padding: .75rem 1rem;
+    background: #eff6ff; border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    font-size: .83rem; color: #1e40af;
+  }
+  .editor-banner .left { display: flex; align-items: center; gap: .5rem; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col-md-8">
-        <h2><i class="bi bi-file-earmark-text"></i> {{ template.name }}</h2>
+<div class="page-header">
+  <h2 class="page-title"><i class="bi bi-file-earmark-text text-primary"></i> Edit Template</h2>
+  <a href="{{ url_for('templates.view_template', template_id=template.id) }}"
+     class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left"></i> Back
+  </a>
+</div>
+
+<div class="edit-layout">
+
+  <!-- LEFT: template metadata settings -->
+  <div class="settings-card">
+    <div class="settings-card-header">
+      <i class="bi bi-sliders"></i> Template Settings
     </div>
-    <div class="col-md-4 text-end">
-        <a href="{{ url_for('templates.create_checklist_item', template_id=template.id) }}" class="btn btn-primary">
-            <i class="bi bi-plus-circle"></i> Add Item
+    <div class="settings-card-body">
+      <form method="POST">
+        {{ form.hidden_tag() }}
+
+        <div class="mb-3">
+          {{ form.name.label(class="form-label fw-semibold small") }}
+          {{ form.name(class="form-control form-control-sm") }}
+          {% if form.name.errors %}
+          <div class="text-danger small mt-1">{{ form.name.errors[0] }}</div>
+          {% endif %}
+        </div>
+
+        <div class="mb-3">
+          {{ form.description.label(class="form-label fw-semibold small") }}
+          {{ form.description(class="form-control form-control-sm", rows=3) }}
+        </div>
+
+        <div class="mb-4">
+          {{ form.frequency.label(class="form-label fw-semibold small") }}
+          {{ form.frequency(class="form-select form-select-sm") }}
+        </div>
+
+        <div class="d-grid gap-2">
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-save"></i> Save Settings
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- open form editor banner -->
+    <div class="editor-banner">
+      <div class="left">
+        <i class="bi bi-grid-3x3-gap"></i>
+        <span>Edit fields &amp; layout in the Form Editor</span>
+      </div>
+      <a href="{{ url_for('templates.form_editor', template_id=template.id) }}"
+         class="btn btn-primary btn-sm flex-shrink-0">
+        <i class="bi bi-pencil-square"></i> Open Editor
+      </a>
+    </div>
+    <div style="height:.85rem;"></div>
+  </div>
+
+  <!-- RIGHT: form canvas preview -->
+  <div class="canvas-card">
+    <div class="canvas-card-header">
+      <h6><i class="bi bi-grid-3x3-gap me-1 text-primary"></i> Form Layout</h6>
+      <div class="d-flex align-items: center; gap: .75rem;">
+        <span class="field-count">{{ form_fields|length }} field{{ 's' if form_fields|length != 1 else '' }}</span>
+        <a href="{{ url_for('templates.form_preview', template_id=template.id) }}"
+           target="_blank" class="btn btn-outline-secondary btn-sm ms-2">
+          <i class="bi bi-eye"></i> Preview
         </a>
+        <a href="{{ url_for('templates.form_editor', template_id=template.id) }}"
+           class="btn btn-primary btn-sm">
+          <i class="bi bi-pencil-square"></i> Edit Form
+        </a>
+      </div>
     </div>
-</div>
 
-<div class="row">
-    <div class="col-md-4">
-        <div class="card shadow-sm mb-4">
-            <div class="card-header bg-light">
-                <h5 class="mb-0">Template Settings</h5>
+    <div class="canvas-card-body">
+      {% if form_fields %}
+      <div class="form-grid">
+        {% for f in form_fields %}
+        <div class="fg-cell"
+             style="grid-column: {{ f.col }} / span {{ f.colSpan }};
+                    grid-row:    {{ f.row }} / span {{ f.rowSpan }};"
+             title="{{ f.label }} ({{ f.type.replace('_', ' ') }})">
+          {% if f.type == 'section' %}
+            <div class="fg-section"><span>{{ f.label }}</span></div>
+          {% elif f.type == 'table' %}
+            <div class="fl"><i class="bi bi-table" style="color:#2563eb;margin-right:.2rem;"></i>{{ f.label }}</div>
+            <span class="ft">table · {{ f.col_headers|length if f.col_headers else 3 }} cols × {{ f.table_rows or 3 }} rows</span>
+          {% elif f.type == 'label' %}
+            <div class="fl" style="font-size:.7rem;color:#374151;overflow:hidden;line-height:1.3;white-space:nowrap;text-overflow:ellipsis;">{{ f.text_content or 'Label text' }}</div>
+            <span class="ft">label</span>
+          {% elif f.type.startswith('button_') %}
+            <div class="fl"><i class="bi bi-{% if f.type == 'button_submit' %}send-fill{% elif f.type == 'button_print' %}printer-fill{% else %}envelope-fill{% endif %}" style="color:#2563eb;margin-right:.2rem;"></i>{{ f.btn_label or f.type.replace('button_','') | title }}</div>
+            <span class="ft">{{ f.type.replace('_',' ') }}</span>
+          {% else %}
+            <div class="fl">
+              {{ f.label }}{% if f.required %}<span class="req-dot"> *</span>{% endif %}
             </div>
-            <div class="card-body">
-                <form method="POST">
-                    {{ form.hidden_tag() }}
-                    
-                    <div class="mb-3">
-                        {{ form.name.label(class="form-label") }}
-                        {{ form.name(class="form-control") }}
-                    </div>
-                    
-                    <div class="mb-3">
-                        {{ form.description.label(class="form-label") }}
-                        {{ form.description(class="form-control", rows=3) }}
-                    </div>
-                    
-                    <div class="mb-3">
-                        {{ form.frequency.label(class="form-label") }}
-                        {{ form.frequency(class="form-select") }}
-                    </div>
-                    
-                    <button type="submit" class="btn btn-primary w-100">
-                        <i class="bi bi-save"></i> Update Template
-                    </button>
-                </form>
-            </div>
+            <span class="ft">{{ f.type.replace('_', ' ') }}</span>
+          {% endif %}
         </div>
-    </div>
-    
-    <div class="col-md-8">
-        <div class="card shadow-sm">
-            <div class="card-header bg-light">
-                <h5 class="mb-0"><i class="bi bi-check2-square"></i> Checklist Items ({{ checklist_items|length }})</h5>
-            </div>
-            <div class="card-body">
-                {% if checklist_items %}
-                <div id="checklist-items" class="list-group">
-                    {% for item in checklist_items %}
-                    <div class="list-group-item checklist-item" data-item-id="{{ item.id }}">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div class="flex-grow-1">
-                                <div class="d-flex align-items-center mb-1">
-                                    <i class="bi bi-grip-vertical text-muted me-2"></i>
-                                    <span class="badge bg-secondary me-2">{{ item.category }}</span>
-                                    <span class="badge bg-info">{{ item.scoring_type.replace('_', ' ')|title }}</span>
-                                    {% if item.requires_photo %}
-                                    <span class="badge bg-warning ms-2"><i class="bi bi-camera"></i></span>
-                                    {% endif %}
-                                </div>
-                                <p class="mb-1">{{ item.item_description }}</p>
-                                <small class="text-muted">Weight: {{ item.weight }}</small>
-                            </div>
-                            <div class="ms-3">
-                                <a href="{{ url_for('templates.edit_checklist_item', item_id=item.id) }}" class="btn btn-sm btn-outline-primary">
-                                    <i class="bi bi-pencil"></i>
-                                </a>
-                                <form method="POST" action="{{ url_for('templates.delete_checklist_item', item_id=item.id) }}" class="d-inline" onsubmit="return confirm('Delete this item?');">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <div class="alert alert-info mb-0">
-                    <i class="bi bi-info-circle"></i> No checklist items yet. Click "Add Item" to get started.
-                </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-</div>
-{% endblock %}
+        {% endfor %}
+      </div>
 
-{% block extra_js %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const el = document.getElementById('checklist-items');
-    if (el) {
-        new Sortable(el, {
-            animation: 150,
-            handle: '.bi-grip-vertical',
-            onEnd: function(evt) {
-                const itemOrder = [];
-                el.querySelectorAll('.checklist-item').forEach(item => {
-                    itemOrder.push(item.getAttribute('data-item-id'));
-                });
-                
-                fetch('{{ url_for("templates.reorder_items", template_id=template.id) }}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ item_order: itemOrder })
-                });
-            }
-        });
-    }
-});
-</script>
+      {% else %}
+      <div class="editor-cta">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+        <p>No fields yet. Open the Form Editor to start building your inspection form.</p>
+        <a href="{{ url_for('templates.form_editor', template_id=template.id) }}"
+           class="btn btn-primary btn-sm">
+          <i class="bi bi-plus-circle"></i> Open Form Editor
+        </a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
 {% endblock %}

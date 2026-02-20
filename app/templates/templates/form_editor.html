@@ -1,0 +1,1159 @@
+{% extends "base.html" %}
+
+{% block title %}Form Editor — {{ template.name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --panel-bg:   #ffffff;
+    --sidebar-bg: #1a1d23;
+    --accent:     #2563eb;
+    --accent-lt:  #eff6ff;
+    --danger:     #dc2626;
+    --success:    #16a34a;
+    --border:     #e2e8f0;
+    --text:       #0f172a;
+    --muted:      #64748b;
+    --shadow-sm:  0 1px 3px rgba(0,0,0,.08);
+    --shadow-md:  0 4px 16px rgba(0,0,0,.12);
+    --shadow-lg:  0 8px 32px rgba(0,0,0,.16);
+    --radius:     10px;
+    --tr:         .15s cubic-bezier(.4,0,.2,1);
+    /* grid constants — also mirrored in JS */
+    --cols:       12;
+    --cell-w:     72px;
+    --cell-h:     52px;
+    --gap:        8px;
+  }
+
+  body { font-family: 'DM Sans', sans-serif; background: #eef0f4; }
+
+  /* ─── shell ─────────────────────────────────────────────────────────── */
+  .editor-shell {
+    display: grid;
+    grid-template-columns: 210px 1fr 272px;
+    grid-template-rows: 52px 1fr;
+    height: calc(100vh - 56px);
+    margin-top: -1.5rem;
+  }
+
+  /* ─── topbar ─────────────────────────────────────────────────────────── */
+  .topbar {
+    grid-column: 1 / -1;
+    background: var(--panel-bg);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: .8rem;
+    padding: 0 1rem;
+    box-shadow: var(--shadow-sm);
+    z-index: 30;
+  }
+  .tpl-name { font-weight: 600; font-size: .9rem; color: var(--text); }
+  .tpl-meta { font-size: .72rem; color: var(--muted); font-family: 'DM Mono', monospace; }
+  .flex1 { flex: 1; }
+  .save-ind {
+    font-size: .72rem; font-family: 'DM Mono', monospace;
+    color: var(--muted); transition: color var(--tr);
+  }
+  .save-ind.saved  { color: var(--success); }
+  .save-ind.saving { color: var(--accent); }
+  .save-ind.error  { color: var(--danger); }
+  .tbtn {
+    display: flex; align-items: center; gap: .3rem;
+    padding: .35rem .85rem; border-radius: 7px;
+    font-size: .8rem; font-weight: 600; cursor: pointer;
+    border: 1.5px solid transparent; text-decoration: none;
+    transition: background var(--tr), color var(--tr), transform var(--tr);
+  }
+  .tbtn.pri { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .tbtn.pri:hover { background: #1d4ed8; transform: translateY(-1px); }
+  .tbtn.out { background: transparent; color: var(--accent); border-color: var(--accent); }
+  .tbtn.out:hover { background: var(--accent); color: #fff; }
+  .tbtn.ghost { color: var(--muted); border: none; background: none; }
+  .tbtn.ghost:hover { color: var(--text); }
+
+  /* ─── palette ───────────────────────────────────────────────────────── */
+  .palette {
+    background: var(--sidebar-bg);
+    overflow-y: auto; padding: .75rem .6rem;
+  }
+  .pal-head {
+    font-size: .6rem; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: #6b7280;
+    padding: .35rem .45rem .15rem; margin-bottom: .15rem;
+  }
+  .pal-item {
+    display: flex; align-items: center; gap: .5rem;
+    padding: .45rem .6rem; border-radius: 7px;
+    cursor: grab; user-select: none;
+    color: #cbd5e1; font-size: .79rem; font-weight: 500;
+    transition: background var(--tr), color var(--tr), transform var(--tr);
+    margin-bottom: 2px;
+  }
+  .pal-item:hover { background: rgba(255,255,255,.09); color: #fff; transform: translateX(2px); }
+  .pal-item.dragging-src { opacity: .35; }
+  .pal-item i { font-size: .9rem; width: 15px; text-align: center; color: #60a5fa; }
+
+  /* ─── canvas area ────────────────────────────────────────────────────── */
+  .canvas-wrap {
+    overflow: auto; padding: 1.25rem;
+    background: #eef0f4;
+  }
+
+  /* the grid surface */
+  .grid-surface {
+    position: relative;
+    /* width = 12 cells + 11 gaps */
+    width: calc(12 * var(--cell-w) + 11 * var(--gap));
+    /* height grows dynamically via JS */
+    min-height: 560px;
+    /* dot-grid background */
+    background-color: #fff;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size:
+      calc(var(--cell-w) + var(--gap)) calc(var(--cell-h) + var(--gap));
+    background-position: calc(var(--cell-w)) calc(var(--cell-h));
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-sm);
+  }
+  .grid-surface.drop-active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+  }
+
+  /* empty hint */
+  .grid-hint {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: #94a3b8; pointer-events: none; gap: .4rem;
+  }
+  .grid-hint i { font-size: 2rem; opacity: .3; }
+  .grid-hint p { font-size: .82rem; margin: 0; }
+
+  /* drop-preview ghost (shown while dragging from palette) */
+  .drop-preview {
+    position: absolute;
+    background: rgba(37,99,235,.1);
+    border: 2px dashed var(--accent);
+    border-radius: 8px;
+    pointer-events: none;
+    z-index: 5;
+    display: none;
+  }
+
+  /* ─── field cards ────────────────────────────────────────────────────── */
+  .fcard {
+    position: absolute;
+    background: var(--panel-bg);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    z-index: 10;
+    transition: box-shadow var(--tr), border-color var(--tr);
+  }
+  .fcard:hover   { border-color: #93c5fd; box-shadow: var(--shadow-md); }
+  .fcard.sel     {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(37,99,235,.15), var(--shadow-md);
+    z-index: 20;
+  }
+  .fcard.moving  { opacity: .55; cursor: grabbing; z-index: 25; }
+
+  /* card header — acts as move handle */
+  .fcard-head {
+    display: flex; align-items: center; gap: .45rem;
+    padding: .38rem .55rem;
+    background: #f8fafc;
+    border-bottom: 1px solid var(--border);
+    cursor: move; flex-shrink: 0;
+    user-select: none;
+  }
+  .fcard-badge {
+    font-size: .6rem; font-weight: 700;
+    font-family: 'DM Mono', monospace;
+    background: var(--accent-lt); color: var(--accent);
+    padding: .1rem .4rem; border-radius: 20px;
+    text-transform: uppercase; letter-spacing: .05em;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .fcard-lbl {
+    flex: 1; font-weight: 500; font-size: .8rem;
+    color: var(--text); overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+  .req-star { color: var(--danger); }
+  .fcard-acts { display: flex; gap: .1rem; flex-shrink: 0; }
+  .fact {
+    border: none; background: none;
+    padding: .18rem .25rem; border-radius: 4px;
+    cursor: pointer; color: #94a3b8; font-size: .78rem;
+    transition: color var(--tr), background var(--tr);
+  }
+  .fact:hover     { color: var(--text); background: var(--border); }
+  .fact.del:hover { color: var(--danger); background: #fee2e2; }
+
+  /* card body — field preview */
+  .fcard-body {
+    padding: .45rem .55rem; flex: 1; overflow: hidden;
+  }
+  .fcard-body label {
+    font-size: .74rem; font-weight: 500;
+    color: var(--muted); margin-bottom: .2rem; display: block;
+  }
+  .fcard-body .form-control,
+  .fcard-body .form-select {
+    font-size: .76rem; pointer-events: none;
+    background: #f8fafc; border-color: var(--border);
+    padding: .2rem .4rem;
+  }
+  .fcard-body .form-check-label { font-size: .76rem; color: var(--muted); }
+  .fcard-body .mock-upload {
+    border: 2px dashed var(--border); border-radius: 6px;
+    padding: .5rem; text-align: center;
+    color: var(--muted); font-size: .74rem; background: #fafbfc;
+  }
+  .fcard-body .mock-upload i { display: block; font-size: 1.1rem; margin-bottom: .15rem; }
+  .fcard-body .mock-sig {
+    border-bottom: 2px solid var(--border);
+    padding: .75rem .4rem .15rem;
+    color: var(--muted); font-size: .72rem; font-style: italic;
+  }
+
+  /* resize handle — bottom-right */
+  .resize-h {
+    position: absolute; bottom: 0; right: 0;
+    width: 18px; height: 18px;
+    cursor: se-resize; z-index: 30;
+    display: flex; align-items: center; justify-content: center;
+    color: #cbd5e1; font-size: .65rem;
+    transition: color var(--tr);
+  }
+  .fcard.sel .resize-h { color: var(--accent); }
+
+  /* ─── properties panel ──────────────────────────────────────────────── */
+  .props-panel {
+    background: var(--panel-bg);
+    border-left: 1px solid var(--border);
+    overflow-y: auto; padding: .9rem .8rem;
+  }
+  .props-empty {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    height: 55%; color: var(--muted);
+    text-align: center; font-size: .8rem;
+  }
+  .props-empty i { font-size: 1.75rem; margin-bottom: .5rem; opacity: .25; }
+  .psec {
+    font-size: .62rem; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted);
+    margin: .9rem 0 .5rem; padding-bottom: .28rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .psec:first-child { margin-top: 0; }
+  .pg { margin-bottom: .65rem; }
+  .pg label {
+    font-size: .72rem; font-weight: 600; color: #374151;
+    margin-bottom: .2rem; display: block;
+  }
+  .pg .form-control, .pg .form-select { font-size: .78rem; border-radius: 6px; }
+  .pg .form-check-label { font-size: .78rem; }
+
+  /* 2-col grid for size inputs */
+  .size-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: .45rem;
+  }
+  .size-grid label { font-size: .7rem; font-weight: 600; color: #374151; display: block; margin-bottom: .18rem; }
+
+  /* options */
+  .opt-list { list-style: none; padding: 0; margin: 0 0 .4rem; }
+  .opt-list li { display: flex; align-items: center; gap: .3rem; margin-bottom: .22rem; }
+  .opt-list li input {
+    flex: 1; font-size: .77rem; padding: .2rem .4rem;
+    border: 1px solid var(--border); border-radius: 5px;
+  }
+  .opt-list li button {
+    border: none; background: none; color: #94a3b8;
+    cursor: pointer; font-size: .78rem; padding: .1rem .2rem;
+  }
+  .opt-list li button:hover { color: var(--danger); }
+
+  /* ─── drag ghost ────────────────────────────────────────────────────── */
+  .drag-ghost {
+    position: fixed; pointer-events: none; z-index: 9999;
+    background: var(--accent); color: #fff;
+    padding: .3rem .7rem; border-radius: 6px;
+    font-size: .76rem; font-weight: 600;
+    box-shadow: var(--shadow-lg); opacity: .9;
+    transform: rotate(-2deg); white-space: nowrap; display: none;
+  }
+
+  /* scrollbars */
+  .palette::-webkit-scrollbar,
+  .canvas-wrap::-webkit-scrollbar,
+  .props-panel::-webkit-scrollbar { width: 5px; }
+  .palette::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+  .canvas-wrap::-webkit-scrollbar-thumb,
+  .props-panel::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="editor-shell">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <a href="{{ url_for('templates.view_template', template_id=template.id) }}" class="tbtn ghost">
+      <i class="bi bi-arrow-left"></i> Back
+    </a>
+    <div>
+      <div class="tpl-name">{{ template.name }}</div>
+      <div class="tpl-meta">Form Editor &middot; {{ template.frequency|title }}</div>
+    </div>
+    <div class="flex1"></div>
+    <span class="save-ind" id="saveInd">All changes saved</span>
+    <a href="{{ url_for('templates.form_preview', template_id=template.id) }}"
+       target="_blank" class="tbtn out"><i class="bi bi-eye"></i> Preview</a>
+    <button class="tbtn pri" onclick="saveSchema()"><i class="bi bi-floppy"></i> Save</button>
+  </div>
+
+  <!-- PALETTE -->
+  <div class="palette">
+    <div class="pal-head">Basic</div>
+    {% for t, ic, lb in [
+      ('text',     'bi-input-cursor-text', 'Text Input'),
+      ('textarea', 'bi-text-left',         'Text Area'),
+      ('number',   'bi-hash',              'Number'),
+      ('date',     'bi-calendar3',         'Date'),
+      ('email',    'bi-envelope',          'Email'),
+    ] %}
+    <div class="pal-item" draggable="true" data-ftype="{{ t }}" data-flabel="{{ lb }}">
+      <i class="bi {{ ic }}"></i> {{ lb }}
+    </div>
+    {% endfor %}
+    <div class="pal-head" style="margin-top:.6rem;">Choice</div>
+    {% for t, ic, lb in [
+      ('checkbox',       'bi-check-square',     'Checkbox'),
+      ('checkbox_group', 'bi-ui-checks',        'Checkbox Group'),
+      ('radio',          'bi-ui-radios',        'Radio Group'),
+      ('select',         'bi-menu-button-wide', 'Dropdown'),
+    ] %}
+    <div class="pal-item" draggable="true" data-ftype="{{ t }}" data-flabel="{{ lb }}">
+      <i class="bi {{ ic }}"></i> {{ lb }}
+    </div>
+    {% endfor %}
+    <div class="pal-head" style="margin-top:.6rem;">Media &amp; Other</div>
+    {% for t, ic, lb in [
+      ('image',     'bi-image',   'Image Upload'),
+      ('signature', 'bi-pen',     'Signature'),
+      ('rating',    'bi-star',    'Rating (1–5)'),
+      ('section',   'bi-dash-lg', 'Section Header'),
+      ('table',     'bi-table',   'Table'),
+    ] %}
+    <div class="pal-item" draggable="true" data-ftype="{{ t }}" data-flabel="{{ lb }}">
+      <i class="bi {{ ic }}"></i> {{ lb }}
+    </div>
+    {% endfor %}
+    <div class="pal-head" style="margin-top:.6rem;">Text &amp; Actions</div>
+    {% for t, ic, lb in [
+      ('label',           'bi-type',           'Label / Text'),
+      ('button_submit',   'bi-send-fill',      'Submit Button'),
+      ('button_print',    'bi-printer-fill',   'Print Button'),
+      ('button_email',    'bi-envelope-fill',  'Email Button'),
+    ] %}
+    <div class="pal-item" draggable="true" data-ftype="{{ t }}" data-flabel="{{ lb }}">
+      <i class="bi {{ ic }}"></i> {{ lb }}
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- CANVAS -->
+  <div class="canvas-wrap" id="canvasWrap">
+    <div class="grid-surface" id="gridSurface">
+      <div class="grid-hint" id="gridHint">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+        <p><strong>Drag fields onto the canvas</strong></p>
+        <p style="font-size:.76rem;margin-top:-.2rem;opacity:.7;">Fields snap to a 12-column grid.</p>
+      </div>
+      <div class="drop-preview" id="dropPreview"></div>
+    </div>
+  </div>
+
+  <!-- PROPERTIES -->
+  <div class="props-panel">
+    <div class="props-empty" id="propsEmpty">
+      <i class="bi bi-sliders"></i>
+      <p>Select a field to edit its properties.</p>
+    </div>
+    <div id="propsContent" style="display:none;"></div>
+  </div>
+
+</div>
+
+<div class="drag-ghost" id="dragGhost"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+//  CONSTANTS  (keep in sync with CSS vars)
+// ═══════════════════════════════════════════════════════════════════════════
+const SAVE_URL   = "{{ url_for('templates.save_form_schema', template_id=template.id) }}";
+const CSRF_TOKEN = "{{ csrf_token }}";
+
+const COLS   = 12;
+const CELL_W = 72;   // px — matches --cell-w
+const CELL_H = 52;   // px — matches --cell-h
+const GAP    = 8;    // px — matches --gap
+
+// Default [colSpan, rowSpan] per type
+const DEF_SIZE = {
+  text:           [6, 2], textarea:       [6, 3],
+  number:         [3, 2], date:           [4, 2],
+  email:          [6, 2], checkbox:       [4, 2],
+  checkbox_group: [5, 4], radio:          [5, 4],
+  select:         [5, 2], image:          [6, 4],
+  signature:      [6, 3], rating:         [5, 2],
+  section:        [12, 1], table:         [12, 5],
+  label:          [6, 1],
+  button_submit:  [3, 1], button_print:  [3, 1], button_email:  [3, 1],
+};
+
+const LABELS = {
+  text:'Text Input', textarea:'Text Area', number:'Number', date:'Date',
+  email:'Email', checkbox:'Checkbox', checkbox_group:'Checkbox Group',
+  radio:'Radio Group', select:'Dropdown', image:'Image Upload',
+  signature:'Signature', rating:'Rating (1–5)', section:'Section Header',
+  table:'Table', label:'Label / Text',
+  button_submit:'Submit Button', button_print:'Print Button', button_email:'Email Button',
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════════════════
+let fields      = [];
+let selectedId  = null;
+
+// palette-drag state
+let palDragType = null;
+
+// card-move state  { id, offX, offY, origCol, origRow }
+let moveState   = null;
+
+// card-resize state  { id, startX, startY, origCS, origRS }
+let resizeState = null;
+
+const ghostEl   = document.getElementById('dragGhost');
+const surface   = document.getElementById('gridSurface');
+const preview   = document.getElementById('dropPreview');
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  GRID MATH
+// ═══════════════════════════════════════════════════════════════════════════
+function cellPx(col, row) {
+  return {
+    x: (col - 1) * (CELL_W + GAP),
+    y: (row - 1) * (CELL_H + GAP),
+  };
+}
+
+function pxCell(x, y) {
+  return {
+    col: Math.max(1, Math.min(COLS, Math.round(x / (CELL_W + GAP)) + 1)),
+    row: Math.max(1, Math.round(y / (CELL_H + GAP)) + 1),
+  };
+}
+
+function cardCss(f) {
+  const { x, y } = cellPx(f.col, f.row);
+  const w = f.colSpan * CELL_W + (f.colSpan - 1) * GAP;
+  const h = f.rowSpan * CELL_H + (f.rowSpan - 1) * GAP;
+  return `left:${x}px;top:${y}px;width:${w}px;height:${h}px;`;
+}
+
+function growSurface() {
+  const maxRow = fields.reduce((m, f) => Math.max(m, f.row + f.rowSpan - 1), 8);
+  surface.style.minHeight = (maxRow * (CELL_H + GAP) + 60) + 'px';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════════════════
+(function init() {
+  const raw = {{ form_schema_json|safe }};
+  if (Array.isArray(raw) && raw.length) {
+    fields = raw.map(f => ({
+      ...f,
+      col:        f.col        ?? 1,
+      row:        f.row        ?? 1,
+      colSpan:    f.colSpan    ?? (DEF_SIZE[f.type]?.[0] ?? 6),
+      rowSpan:    f.rowSpan    ?? (DEF_SIZE[f.type]?.[1] ?? 2),
+      // table back-compat
+      table_cols:  f.type === 'table' ? (f.table_cols  ?? 3) : f.table_cols,
+      table_rows:  f.type === 'table' ? (f.table_rows  ?? 3) : f.table_rows,
+      col_headers: f.type === 'table' ? (f.col_headers ?? ['Column 1','Column 2','Column 3']) : f.col_headers,
+      // label back-compat
+      text_content: f.type === 'label' ? (f.text_content ?? 'Label text') : f.text_content,
+      font_size:    f.type === 'label' ? (f.font_size    ?? 'normal')      : f.font_size,
+      font_weight:  f.type === 'label' ? (f.font_weight  ?? 'normal')      : f.font_weight,
+      // button back-compat
+      btn_label: f.type.startsWith('button_') ? (f.btn_label ??
+        ({button_submit:'Submit Form',button_print:'Print Form',button_email:'Email Form'}[f.type]||'Button')
+      ) : f.btn_label,
+    }));
+    renderAll();
+  }
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  FIELD FACTORY
+// ═══════════════════════════════════════════════════════════════════════════
+function mkField(type, col, row) {
+  const [cs, rs] = DEF_SIZE[type] ?? [6, 2];
+  const isTable  = type === 'table';
+  return {
+    id:          'f_' + Date.now() + '_' + (Math.random() * 9999 | 0),
+    type,
+    label:       LABELS[type] ?? 'Field',
+    placeholder: '',
+    required:    false,
+    help_text:   '',
+    options:     ['radio','checkbox_group','select'].includes(type) ? ['Option 1','Option 2'] : [],
+    table_cols:  isTable ? 3 : undefined,
+    table_rows:  isTable ? 3 : undefined,
+    col_headers: isTable ? ['Column 1','Column 2','Column 3'] : undefined,
+    // label: free-text content
+    text_content: type === 'label' ? 'Label text' : undefined,
+    // buttons: configurable label text
+    btn_label: type.startsWith('button_')
+      ? { button_submit:'Submit Form', button_print:'Print Form', button_email:'Email Form' }[type]
+      : undefined,
+    col:  Math.max(1, Math.min(COLS - cs + 1, col ?? 1)),
+    row:  Math.max(1, row ?? 1),
+    colSpan: cs,
+    rowSpan: rs,
+    order: fields.length,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  RENDER — diff-patch cards on the grid surface
+// ═══════════════════════════════════════════════════════════════════════════
+function renderAll() {
+  document.getElementById('gridHint').style.display = fields.length ? 'none' : '';
+
+  const existing = {};
+  surface.querySelectorAll('.fcard').forEach(el => { existing[el.dataset.id] = el; });
+
+  fields.forEach(f => {
+    let card = existing[f.id];
+    if (card) {
+      card.style.cssText = cardCss(f);
+      updateHead(card, f);
+      updateBody(card, f);
+      delete existing[f.id];
+    } else {
+      card = buildCard(f);
+      surface.appendChild(card);
+    }
+    card.classList.toggle('sel', f.id === selectedId);
+  });
+
+  Object.values(existing).forEach(el => el.remove());
+  growSurface();
+}
+
+function buildCard(f) {
+  const card = document.createElement('div');
+  card.className = 'fcard';
+  card.dataset.id = f.id;
+  card.style.cssText = cardCss(f);
+
+  card.innerHTML = `
+    <div class="fcard-head">
+      <span class="fcard-badge">${esc(f.type.replace('_',' '))}</span>
+      <span class="fcard-lbl">${esc(f.label)}${f.required ? '<span class="req-star"> *</span>':''}</span>
+      <div class="fcard-acts">
+        <button class="fact" data-act="dup" title="Duplicate"><i class="bi bi-copy"></i></button>
+        <button class="fact del" data-act="del" title="Delete"><i class="bi bi-trash3"></i></button>
+      </div>
+    </div>
+    <div class="fcard-body">${mkPreview(f)}</div>
+    <div class="resize-h" title="Drag to resize"><i class="bi bi-arrows-angle-expand"></i></div>
+  `;
+
+  // click to select
+  card.addEventListener('mousedown', e => {
+    if (e.target.closest('.fact') || e.target.closest('.resize-h')) return;
+    selectField(f.id);
+  });
+
+  // action buttons
+  card.querySelector('[data-act="dup"]').addEventListener('click', e => { e.stopPropagation(); dupField(f.id); });
+  card.querySelector('[data-act="del"]').addEventListener('click', e => { e.stopPropagation(); delField(f.id); });
+
+  // move via header
+  card.querySelector('.fcard-head').addEventListener('mousedown', e => {
+    if (e.target.closest('.fact')) return;
+    e.preventDefault();
+    selectField(f.id);
+    const rect   = surface.getBoundingClientRect();
+    const cRect  = card.getBoundingClientRect();
+    moveState = {
+      id:   f.id,
+      offX: e.clientX - cRect.left,
+      offY: e.clientY - cRect.top,
+      surfLeft: rect.left,
+      surfTop:  rect.top,
+    };
+    card.classList.add('moving');
+    showPreview(f);
+  });
+
+  // resize
+  card.querySelector('.resize-h').addEventListener('mousedown', e => {
+    e.preventDefault(); e.stopPropagation();
+    selectField(f.id);
+    resizeState = {
+      id:     f.id,
+      startX: e.clientX, startY: e.clientY,
+      origCS: f.colSpan, origRS: f.rowSpan,
+    };
+    showPreview(f);
+  });
+
+  return card;
+}
+
+function updateHead(card, f) {
+  const badge = card.querySelector('.fcard-badge');
+  const lbl   = card.querySelector('.fcard-lbl');
+  if (badge) badge.textContent = f.type.replace('_',' ');
+  if (lbl)   lbl.innerHTML = esc(f.label) + (f.required ? '<span class="req-star"> *</span>' : '');
+}
+
+function updateBody(card, f) {
+  const body = card.querySelector('.fcard-body');
+  if (body) body.innerHTML = mkPreview(f);
+}
+
+function mkPreview(f) {
+  const ph  = f.placeholder ? `placeholder="${esc(f.placeholder)}"` : '';
+  const lbl = f.type !== 'section'
+    ? `<label>${esc(f.label)}${f.required ? ' <span class="req-star">*</span>':''}</label>`
+    : '';
+  switch (f.type) {
+    case 'text':
+      return `${lbl}<input class="form-control form-control-sm" type="text" ${ph} disabled>`;
+    case 'textarea':
+      return `${lbl}<textarea class="form-control form-control-sm" rows="4" ${ph} disabled></textarea>`;
+    case 'number':
+      return `${lbl}<input class="form-control form-control-sm" type="number" ${ph} disabled>`;
+    case 'date':
+      return `${lbl}<input class="form-control form-control-sm" type="date" disabled>`;
+    case 'email':
+      return `${lbl}<input class="form-control form-control-sm" type="email" ${ph} disabled>`;
+    case 'checkbox':
+      return `<div class="form-check">
+        <input class="form-check-input" type="checkbox" disabled>
+        <label class="form-check-label">${esc(f.label)}${f.required?'<span class="req-star"> *</span>':''}</label>
+      </div>`;
+    case 'checkbox_group':
+      return lbl + (f.options||[]).map(o => `<div class="form-check">
+        <input class="form-check-input" type="checkbox" disabled>
+        <label class="form-check-label">${esc(o)}</label></div>`).join('');
+    case 'radio':
+      return lbl + (f.options||[]).map(o => `<div class="form-check">
+        <input class="form-check-input" type="radio" disabled>
+        <label class="form-check-label">${esc(o)}</label></div>`).join('');
+    case 'select':
+      return `${lbl}<select class="form-select form-select-sm" disabled>
+        <option>-- Select --</option>
+        ${(f.options||[]).map(o=>`<option>${esc(o)}</option>`).join('')}
+      </select>`;
+    case 'image':
+      return `${lbl}<div class="mock-upload"><i class="bi bi-cloud-upload"></i>Upload image</div>`;
+    case 'signature':
+      return `${lbl}<div class="mock-sig">Sign here…</div>`;
+    case 'rating':
+      return `${lbl}<div style="font-size:1.2rem;color:#f59e0b;letter-spacing:.15rem;">★★★★★</div>`;
+    case 'section':
+      return `<div style="border-top:2px solid #e2e8f0;padding-top:.4rem;">
+        <strong style="font-size:.86rem;color:#374151;">${esc(f.label)}</strong>
+      </div>`;
+    case 'label': {
+      const fsMap = {small:'.72rem', normal:'.84rem', large:'1rem', 'x-large':'1.2rem'};
+      const fs = fsMap[f.font_size||'normal'] || '.84rem';
+      const fw = f.font_weight || 'normal';
+      return `<div style="padding:.25rem .1rem;font-size:${fs};font-weight:${fw};color:#374151;line-height:1.4;overflow:hidden;white-space:pre-wrap;">${esc(f.text_content || 'Label text')}</div>`;
+    }
+    case 'button_submit':
+      return `<button class="btn btn-primary btn-sm w-100 mt-1" disabled>
+        <i class="bi bi-send-fill"></i> ${esc(f.btn_label || 'Submit Form')}</button>`;
+    case 'button_print':
+      return `<button class="btn btn-outline-secondary btn-sm w-100 mt-1" disabled>
+        <i class="bi bi-printer-fill"></i> ${esc(f.btn_label || 'Print Form')}</button>`;
+    case 'button_email':
+      return `<button class="btn btn-outline-primary btn-sm w-100 mt-1" disabled>
+        <i class="bi bi-envelope-fill"></i> ${esc(f.btn_label || 'Email Form')}</button>`;
+    case 'table': {
+      const tcols = f.col_headers || ['Col 1','Col 2','Col 3'];
+      const trows = f.table_rows  || 3;
+      const hdrs  = tcols.map(h => `<th style="background:#f1f5f9;font-size:.68rem;padding:.2rem .35rem;border:1px solid #e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px;">${esc(h)}</th>`).join('');
+      const cells = tcols.map(() => `<td style="font-size:.65rem;padding:.18rem .3rem;border:1px solid #e2e8f0;color:#94a3b8;">—</td>`).join('');
+      const rows  = Array(trows).fill(`<tr>${cells}</tr>`).join('');
+      return `${lbl}<div style="overflow:auto;flex:1;">
+        <table style="border-collapse:collapse;width:100%;font-size:.72rem;">
+          <thead><tr>${hdrs}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>`;
+    }
+    default:
+      return `${lbl}<input class="form-control form-control-sm" disabled>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  DROP PREVIEW (blue ghost box on the grid)
+// ═══════════════════════════════════════════════════════════════════════════
+function showPreview(f) {
+  positionPreview(f.col, f.row, f.colSpan, f.rowSpan);
+  preview.style.display = '';
+}
+function hidePreview() { preview.style.display = 'none'; }
+function positionPreview(col, row, cs, rs) {
+  const { x, y } = cellPx(col, row);
+  preview.style.left   = x + 'px';
+  preview.style.top    = y + 'px';
+  preview.style.width  = (cs * CELL_W + (cs-1)*GAP) + 'px';
+  preview.style.height = (rs * CELL_H + (rs-1)*GAP) + 'px';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  SELECT + PROPERTIES
+// ═══════════════════════════════════════════════════════════════════════════
+function selectField(id) {
+  selectedId = id;
+  surface.querySelectorAll('.fcard').forEach(c => {
+    c.classList.toggle('sel', c.dataset.id === id);
+  });
+  renderProperties();
+}
+
+function renderProperties() {
+  const empty   = document.getElementById('propsEmpty');
+  const content = document.getElementById('propsContent');
+  if (!selectedId) { empty.style.display=''; content.style.display='none'; return; }
+  const f = fields.find(f => f.id === selectedId);
+  if (!f) return;
+  empty.style.display = 'none'; content.style.display = '';
+  const hasOpts  = ['radio','checkbox_group','select'].includes(f.type);
+  const isSec    = f.type === 'section';
+  const isLabel  = f.type === 'label';
+  const isBtn    = f.type.startsWith('button_');
+  const isSimple = isLabel || isBtn;   // no label/placeholder/required row
+
+  content.innerHTML = `
+    ${!isSimple ? `
+    <div class="psec">Field</div>
+    <div class="pg">
+      <label>${isSec ? 'Section Title' : 'Label'}</label>
+      <input class="form-control form-control-sm" value="${esc(f.label)}"
+             oninput="setProp('label', this.value)">
+    </div>` : ''}
+    ${!isSimple && !['checkbox','section','image','signature','rating','table'].includes(f.type) ? `
+    <div class="pg">
+      <label>Placeholder</label>
+      <input class="form-control form-control-sm" value="${esc(f.placeholder||'')}"
+             oninput="setProp('placeholder', this.value)">
+    </div>` : ''}
+    ${!isSimple && !isSec ? `
+    <div class="pg">
+      <label>Help Text</label>
+      <input class="form-control form-control-sm" value="${esc(f.help_text||'')}"
+             placeholder="Optional hint" oninput="setProp('help_text', this.value)">
+    </div>
+    <div class="pg">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="req-chk"
+               ${f.required?'checked':''} onchange="setProp('required', this.checked)">
+        <label class="form-check-label" for="req-chk">Required</label>
+      </div>
+    </div>` : ''}
+
+    <div class="psec">Size &amp; Position</div>
+    <div class="size-grid">
+      <div>
+        <label>Width (cols 1–12)</label>
+        <input class="form-control form-control-sm" type="number" min="1" max="12"
+               value="${f.colSpan}" oninput="setSizeProp('colSpan', this.value, 1, 12)">
+      </div>
+      <div>
+        <label>Height (rows)</label>
+        <input class="form-control form-control-sm" type="number" min="1" max="30"
+               value="${f.rowSpan}" oninput="setSizeProp('rowSpan', this.value, 1, 30)">
+      </div>
+      <div>
+        <label>Start column</label>
+        <input class="form-control form-control-sm" type="number" min="1" max="12"
+               value="${f.col}" oninput="setSizeProp('col', this.value, 1, 12)">
+      </div>
+      <div>
+        <label>Start row</label>
+        <input class="form-control form-control-sm" type="number" min="1" max="200"
+               value="${f.row}" oninput="setSizeProp('row', this.value, 1, 200)">
+      </div>
+    </div>
+
+    ${hasOpts ? `
+    <div class="psec">Options</div>
+    <ul class="opt-list" id="optList">
+      ${(f.options||[]).map((o,i) => `
+        <li>
+          <input value="${esc(o)}" oninput="setOpt(${i}, this.value)">
+          <button onclick="rmOpt(${i})"><i class="bi bi-x-lg"></i></button>
+        </li>`).join('')}
+    </ul>
+    <button class="btn btn-outline-secondary btn-sm" style="font-size:.73rem;padding:.22rem .5rem;"
+            onclick="addOpt()"><i class="bi bi-plus"></i> Add Option</button>
+    ` : ''}
+
+    ${f.type === 'label' ? `
+    <div class="psec">Content</div>
+    <div class="pg">
+      <label>Text</label>
+      <textarea class="form-control form-control-sm" rows="3"
+                oninput="setProp('text_content', this.value)"
+                style="resize:vertical;">${esc(f.text_content||'Label text')}</textarea>
+    </div>
+    <div class="pg">
+      <label>Font size</label>
+      <select class="form-select form-select-sm" onchange="setProp('font_size', this.value)">
+        ${['small','normal','large','x-large'].map(s =>
+          `<option value="${s}"${(f.font_size||'normal')===s?' selected':''}>${s}</option>`
+        ).join('')}
+      </select>
+    </div>
+    <div class="pg">
+      <label>Font weight</label>
+      <select class="form-select form-select-sm" onchange="setProp('font_weight', this.value)">
+        ${['normal','bold'].map(w =>
+          `<option value="${w}"${(f.font_weight||'normal')===w?' selected':''}>${w}</option>`
+        ).join('')}
+      </select>
+    </div>
+    ` : ''}
+
+    ${f.type.startsWith('button_') ? `
+    <div class="psec">Button</div>
+    <div class="pg">
+      <label>Button label</label>
+      <input class="form-control form-control-sm" value="${esc(f.btn_label||'')}"
+             oninput="setProp('btn_label', this.value)">
+    </div>
+    ` : ''}
+
+    ${f.type === 'table' ? `
+    <div class="psec">Table Structure</div>
+    <div class="pg">
+      <label>Data rows</label>
+      <input class="form-control form-control-sm" type="number" min="1" max="30"
+             value="${f.table_rows||3}" oninput="setTableRows(parseInt(this.value)||1)">
+    </div>
+    <div class="psec">Column Headers</div>
+    <ul class="opt-list" id="colHdrList">
+      ${(f.col_headers||[]).map((h,i) => `
+        <li>
+          <input value="${esc(h)}" oninput="setColHeader(${i}, this.value)" placeholder="Col ${i+1}">
+          <button onclick="rmTableCol(${i})" title="Remove column"><i class="bi bi-x-lg"></i></button>
+        </li>`).join('')}
+    </ul>
+    <button class="btn btn-outline-secondary btn-sm" style="font-size:.73rem;padding:.22rem .5rem;"
+            onclick="addTableCol()"><i class="bi bi-plus"></i> Add Column</button>
+    ` : ''}
+  `;
+}
+
+function setProp(key, val) {
+  const f = fields.find(f => f.id === selectedId); if (!f) return;
+  f[key] = val; markDirty();
+  const card = surface.querySelector(`[data-id="${selectedId}"]`);
+  if (card) { updateHead(card, f); updateBody(card, f); }
+}
+
+function setSizeProp(key, val, min, max) {
+  const f = fields.find(f => f.id === selectedId); if (!f) return;
+  const n = Math.max(min, Math.min(max, parseInt(val) || min));
+  f[key] = n; markDirty();
+  const card = surface.querySelector(`[data-id="${selectedId}"]`);
+  if (card) { card.style.cssText = cardCss(f); }
+  growSurface();
+}
+
+function setOpt(i, v) {
+  const f = fields.find(f => f.id === selectedId); if (!f) return;
+  f.options[i] = v; markDirty();
+  const card = surface.querySelector(`[data-id="${selectedId}"]`);
+  if (card) updateBody(card, f);
+}
+function addOpt() {
+  const f = fields.find(f => f.id === selectedId); if (!f) return;
+  f.options.push('Option ' + (f.options.length + 1));
+  markDirty(); renderProperties();
+  const card = surface.querySelector(`[data-id="${selectedId}"]`);
+  if (card) updateBody(card, f);
+}
+function rmOpt(i) {
+  const f = fields.find(f => f.id === selectedId); if (!f) return;
+  f.options.splice(i, 1);
+  markDirty(); renderProperties();
+  const card = surface.querySelector(`[data-id="${selectedId}"]`);
+  if (card) updateBody(card, f);
+}
+
+// ── Table helpers ───────────────────────────────────────────────────────────
+function setTableRows(n) {
+  const f = fields.find(f => f.id === selectedId); if (!f) return;
+  f.table_rows = Math.max(1, Math.min(30, n));
+  markDirty();
+  const card = surface.querySelector(`[data-id="${selectedId}"]`);
+  if (card) updateBody(card, f);
+}
+function setColHeader(i, v) {
+  const f = fields.find(f => f.id === selectedId); if (!f) return;
+  f.col_headers[i] = v;
+  f.table_cols = f.col_headers.length;
+  markDirty();
+  const card = surface.querySelector(`[data-id="${selectedId}"]`);
+  if (card) updateBody(card, f);
+}
+function addTableCol() {
+  const f = fields.find(f => f.id === selectedId); if (!f) return;
+  f.col_headers = f.col_headers || [];
+  f.col_headers.push('Column ' + (f.col_headers.length + 1));
+  f.table_cols = f.col_headers.length;
+  markDirty(); renderProperties();
+  const card = surface.querySelector(`[data-id="${selectedId}"]`);
+  if (card) updateBody(card, f);
+}
+function rmTableCol(i) {
+  const f = fields.find(f => f.id === selectedId); if (!f || f.col_headers.length <= 1) return;
+  f.col_headers.splice(i, 1);
+  f.table_cols = f.col_headers.length;
+  markDirty(); renderProperties();
+  const card = surface.querySelector(`[data-id="${selectedId}"]`);
+  if (card) updateBody(card, f);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  FIELD OPERATIONS
+// ═══════════════════════════════════════════════════════════════════════════
+function addField(type, col, row) {
+  const f = mkField(type, col, row);
+  fields.push(f);
+  selectedId = f.id;
+  renderAll();
+  renderProperties();
+  markDirty();
+}
+
+function delField(id) {
+  fields = fields.filter(f => f.id !== id);
+  if (selectedId === id) { selectedId = null; renderProperties(); }
+  renderAll(); markDirty();
+}
+
+function dupField(id) {
+  const src = fields.find(f => f.id === id); if (!src) return;
+  const clone = JSON.parse(JSON.stringify(src));
+  clone.id  = 'f_' + Date.now() + '_' + (Math.random()*9999|0);
+  clone.row = src.row + src.rowSpan + 1;
+  fields.push(clone);
+  selectedId = clone.id;
+  renderAll(); renderProperties(); markDirty();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  MOUSE MOVE + RESIZE
+// ═══════════════════════════════════════════════════════════════════════════
+document.addEventListener('mousemove', e => {
+  // move ghost label
+  if (ghostEl.style.display !== 'none') {
+    ghostEl.style.left = (e.clientX + 12) + 'px';
+    ghostEl.style.top  = (e.clientY + 10) + 'px';
+  }
+
+  if (moveState) {
+    const f = fields.find(f => f.id === moveState.id); if (!f) return;
+    const x = e.clientX - moveState.surfLeft - moveState.offX;
+    const y = e.clientY - moveState.surfTop  - moveState.offY;
+    const { col, row } = pxCell(x, y);
+    const newCol = Math.max(1, Math.min(COLS - f.colSpan + 1, col));
+    const newRow = Math.max(1, row);
+    if (newCol !== f.col || newRow !== f.row) {
+      f.col = newCol; f.row = newRow;
+      const card = surface.querySelector(`[data-id="${f.id}"]`);
+      if (card) card.style.cssText = cardCss(f);
+      positionPreview(f.col, f.row, f.colSpan, f.rowSpan);
+      growSurface(); markDirty();
+    }
+  }
+
+  if (resizeState) {
+    const f = fields.find(f => f.id === resizeState.id); if (!f) return;
+    const dCol = Math.round((e.clientX - resizeState.startX) / (CELL_W + GAP));
+    const dRow = Math.round((e.clientY - resizeState.startY) / (CELL_H + GAP));
+    const newCS = Math.max(1, Math.min(COLS - f.col + 1, resizeState.origCS + dCol));
+    const newRS = Math.max(1, resizeState.origRS + dRow);
+    if (newCS !== f.colSpan || newRS !== f.rowSpan) {
+      f.colSpan = newCS; f.rowSpan = newRS;
+      const card = surface.querySelector(`[data-id="${f.id}"]`);
+      if (card) card.style.cssText = cardCss(f);
+      positionPreview(f.col, f.row, f.colSpan, f.rowSpan);
+      growSurface(); markDirty();
+      // live-update size inputs in props panel
+      const inputs = document.querySelectorAll('#propsContent .size-grid input');
+      if (inputs[0]) inputs[0].value = newCS;
+      if (inputs[1]) inputs[1].value = newRS;
+    }
+  }
+});
+
+document.addEventListener('mouseup', () => {
+  if (moveState) {
+    surface.querySelector(`[data-id="${moveState.id}"]`)?.classList.remove('moving');
+    hidePreview(); renderProperties(); moveState = null;
+  }
+  if (resizeState) { hidePreview(); renderProperties(); resizeState = null; }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  PALETTE DRAG → CANVAS  (HTML5 drag API)
+// ═══════════════════════════════════════════════════════════════════════════
+document.querySelectorAll('.pal-item').forEach(item => {
+  item.addEventListener('dragstart', e => {
+    palDragType = item.dataset.ftype;
+    e.dataTransfer.setData('ftype',  item.dataset.ftype);
+    e.dataTransfer.setData('flabel', item.dataset.flabel);
+    ghostEl.textContent  = '+ ' + item.dataset.flabel;
+    ghostEl.style.display = 'block';
+    e.dataTransfer.effectAllowed = 'copy';
+    item.classList.add('dragging-src');
+  });
+  item.addEventListener('dragend', () => {
+    ghostEl.style.display = 'none';
+    item.classList.remove('dragging-src');
+  });
+});
+
+document.addEventListener('dragover', e => {
+  ghostEl.style.left = (e.clientX + 12) + 'px';
+  ghostEl.style.top  = (e.clientY + 10) + 'px';
+});
+
+surface.addEventListener('dragover', e => {
+  e.preventDefault();
+  surface.classList.add('drop-active');
+  const type = palDragType || e.dataTransfer.getData('ftype');
+  if (!type) return;
+  const rect = surface.getBoundingClientRect();
+  const { col, row } = pxCell(e.clientX - rect.left, e.clientY - rect.top);
+  const [cs, rs] = DEF_SIZE[type] ?? [6, 2];
+  const safeCol  = Math.max(1, Math.min(COLS - cs + 1, col));
+  positionPreview(safeCol, Math.max(1, row), cs, rs);
+  preview.style.display = '';
+});
+
+surface.addEventListener('dragleave', e => {
+  if (!surface.contains(e.relatedTarget)) {
+    surface.classList.remove('drop-active');
+    hidePreview();
+  }
+});
+
+surface.addEventListener('drop', e => {
+  e.preventDefault();
+  surface.classList.remove('drop-active');
+  hidePreview();
+  const type = e.dataTransfer.getData('ftype') || palDragType;
+  palDragType = null;
+  if (!type) return;
+  const rect = surface.getBoundingClientRect();
+  const { col, row } = pxCell(e.clientX - rect.left, e.clientY - rect.top);
+  const [cs] = DEF_SIZE[type] ?? [6, 2];
+  addField(type, Math.max(1, Math.min(COLS - cs + 1, col)), Math.max(1, row));
+});
+
+// deselect on bare canvas click
+surface.addEventListener('mousedown', e => {
+  if (e.target === surface || e.target.closest('.grid-hint')) {
+    selectedId = null;
+    surface.querySelectorAll('.fcard').forEach(c => c.classList.remove('sel'));
+    renderProperties();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  SAVE
+// ═══════════════════════════════════════════════════════════════════════════
+let saveTimer = null;
+
+function markDirty() {
+  setInd('saving', '● Unsaved');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => saveSchema(true), 2500);
+}
+
+function setInd(cls, txt) {
+  const el = document.getElementById('saveInd');
+  el.className = 'save-ind ' + cls;
+  el.textContent = txt;
+}
+
+async function saveSchema(silent=false) {
+  clearTimeout(saveTimer);
+  if (!silent) setInd('saving', 'Saving…');
+  fields.forEach((f, i) => f.order = i);
+  try {
+    const r = await fetch(SAVE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'X-CSRFToken': CSRF_TOKEN },
+      body: JSON.stringify({ fields }),
+    });
+    const d = await r.json();
+    setInd(d.success ? 'saved' : 'error',
+           d.success ? `✓ Saved — ${d.field_count} field${d.field_count!==1?'s':''}` : '✗ Save failed');
+  } catch { setInd('error', '✗ Network error'); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  KEYBOARD
+// ═══════════════════════════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey||e.metaKey) && e.key==='s') { e.preventDefault(); saveSchema(); }
+  if ((e.key==='Delete'||e.key==='Backspace') && selectedId &&
+      !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) {
+    delField(selectedId);
+  }
+  if (e.key==='Escape') {
+    selectedId = null;
+    surface.querySelectorAll('.fcard').forEach(c => c.classList.remove('sel'));
+    renderProperties();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  UTIL
+// ═══════════════════════════════════════════════════════════════════════════
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+</script>
+{% endblock %}

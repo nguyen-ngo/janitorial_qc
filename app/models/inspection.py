@@ -1,5 +1,7 @@
 from app import db
 from datetime import datetime
+import json
+
 
 class InspectionTemplate(db.Model):
     __tablename__ = 'inspection_templates'
@@ -11,12 +13,27 @@ class InspectionTemplate(db.Model):
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    # Form builder schema — stores the full dynamic field layout as JSON
+    form_schema = db.Column(db.JSON, nullable=True)
+
     # Relationships
     checklist_items = db.relationship('ChecklistItem', backref='template', lazy='dynamic', cascade='all, delete-orphan')
     inspections = db.relationship('Inspection', backref='template', lazy='dynamic')
 
+    def get_form_schema(self):
+        """Return the form schema as a Python list, or empty list if not set."""
+        if self.form_schema is None:
+            return []
+        if isinstance(self.form_schema, str):
+            try:
+                return json.loads(self.form_schema)
+            except (json.JSONDecodeError, TypeError):
+                return []
+        return self.form_schema
+
     def __repr__(self):
         return f'<InspectionTemplate {self.name}>'
+
 
 class ChecklistItem(db.Model):
     __tablename__ = 'checklist_items'
@@ -35,6 +52,7 @@ class ChecklistItem(db.Model):
 
     def __repr__(self):
         return f'<ChecklistItem {self.item_description[:30]}>'
+
 
 class Inspection(db.Model):
     __tablename__ = 'inspections'
@@ -56,6 +74,7 @@ class Inspection(db.Model):
 
     def __repr__(self):
         return f'<Inspection {self.id} - {self.inspection_date}>'
+
 
 class InspectionResult(db.Model):
     __tablename__ = 'inspection_results'

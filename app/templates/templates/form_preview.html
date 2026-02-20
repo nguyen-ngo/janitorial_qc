@@ -1,0 +1,382 @@
+{% extends "base.html" %}
+
+{% block title %}Preview — {{ template.name }}{% endblock %}
+
+{% block extra_css %}
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'DM Sans', sans-serif; background: #eef0f4; }
+
+  .preview-wrap { max-width: 960px; margin: 2rem auto; padding: 0 1rem 3rem; }
+
+  .preview-header {
+    background: #1a1d23; color: #fff;
+    padding: 1.25rem 1.75rem;
+    border-radius: 12px 12px 0 0;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .preview-header h4 { margin: 0; font-weight: 600; font-size: 1.05rem; }
+  .preview-header .sub { font-size: .78rem; color: #94a3b8; margin-top: .2rem; }
+  .freq-badge {
+    font-size: .72rem;
+    background: rgba(255,255,255,.15);
+    padding: .28rem .65rem; border-radius: 20px; font-weight: 500;
+  }
+
+  .preview-notice {
+    background: #eff6ff; border: 1px solid #bfdbfe;
+    border-radius: 8px; padding: .65rem 1rem;
+    font-size: .82rem; color: #1d4ed8;
+    margin-bottom: 1.5rem;
+    display: flex; align-items: center; gap: .45rem;
+  }
+
+  .preview-body {
+    background: #fff;
+    border: 1px solid #e2e8f0; border-top: none;
+    border-radius: 0 0 12px 12px;
+    padding: 1.75rem;
+    overflow-x: auto;
+  }
+
+  /* 12-col grid — same columns as editor, rows shrink to content in preview */
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 72px);
+    grid-auto-rows: auto;   /* no fixed row height — rows are only as tall as their content */
+    gap: 4px 8px;           /* 4px row-gap (tight), 8px col-gap (matches editor) */
+    width: max-content;
+  }
+
+  /* ── Cell ── */
+  .fg-cell {
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    padding: .22rem .55rem;   /* top/bottom halved from .45rem */
+  }
+  /* Label shown above the input — same style as editor card header label */
+  .fg-cell .field-lbl {
+    font-size: .74rem; font-weight: 500;
+    color: #64748b; margin-bottom: .2rem; display: block;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    flex-shrink: 0;
+  }
+  .required-mark { color: #dc2626; }
+  .help-text { font-size: .72rem; color: #64748b; margin-top: .18rem; flex-shrink: 0; }
+
+  /* Inputs/selects: compact to match editor body sizing */
+  .fg-cell .form-control,
+  .fg-cell .form-select {
+    font-size: .76rem;
+    padding: .2rem .4rem;
+    border-color: #e2e8f0;
+    background: #f8fafc;
+    /* NO flex/height stretch — inputs must be their natural intrinsic height,
+       exactly as in the editor where no flex is applied to .fcard-body inputs */
+  }
+  .fg-cell textarea.form-control { resize: vertical; flex: 1; min-height: 4; }
+  .fg-cell .upload-zone,
+  .fg-cell .signature-box  { flex: 1; min-height: 0; }
+  .fg-cell .form-check-label { font-size: .76rem; color: #64748b; }
+  .fg-cell .form-check-input { margin-top: .18rem; }
+  .fg-cell .form-check { margin-bottom: .1rem; }
+
+  .upload-zone {
+    border: 2px dashed #cbd5e1; border-radius: 6px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: #64748b; background: #f8fafc;
+    cursor: pointer; font-size: .74rem; gap: .2rem;
+    transition: border-color .18s, background .18s;
+  }
+  .upload-zone:hover { border-color: #2563eb; background: #eff6ff; color: #2563eb; }
+  .upload-zone i { font-size: 1.1rem; }
+
+  .signature-box {
+    border-bottom: 2px solid #e2e8f0;
+    flex: 1; min-height: 0;
+    display: flex; align-items: flex-end;
+    padding: .75rem .4rem .15rem;    /* same as editor .mock-sig */
+    color: #94a3b8; font-size: .72rem; font-style: italic;
+  }
+
+  .rating-stars { display: flex; gap: .25rem; align-items: center; padding-top: .08rem; }
+  .rating-stars button {
+    border: none; background: none;
+    font-size: 1.45rem; color: #cbd5e1;
+    cursor: pointer; padding: 0; line-height: 1;
+    transition: color .12s;
+  }
+  .rating-stars button:hover,
+  .rating-stars button.on { color: #f59e0b; }
+
+  .section-divider {
+    border-top: 2px solid #e2e8f0; padding-top: .4rem;
+    height: 100%; display: flex; align-items: center;
+    padding: 0;   /* cell already has .45rem .55rem padding */
+  }
+  .section-divider h5 { font-weight: 700; color: #374151; margin: 0; font-size: .95rem; }
+
+  .preview-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 1.5rem; padding-top: 1.25rem;
+    border-top: 1px solid #e2e8f0;
+  }
+  .btn-back {
+    display: inline-flex; align-items: center; gap: .4rem;
+    padding: .42rem .95rem; border-radius: 7px;
+    background: #1a1d23; color: #fff;
+    font-size: .83rem; font-weight: 600;
+    text-decoration: none; transition: background .18s;
+  }
+  .btn-back:hover { background: #374151; color: #fff; }
+
+  .empty-form {
+    text-align: center; padding: 3rem 1rem; color: #94a3b8;
+  }
+  .empty-form i { font-size: 2.25rem; display: block; margin-bottom: .65rem; opacity: .38; }
+
+  /* table field */
+  .tbl-field {
+    width: 100%; border-collapse: collapse; font-size: .8rem;
+  }
+  .tbl-field th {
+    background: #f1f5f9; font-weight: 600; color: #374151;
+    padding: .3rem .5rem; border: 1px solid #e2e8f0;
+    white-space: nowrap; font-size: .78rem;
+  }
+  .tbl-field td {
+    border: 1px solid #e2e8f0; padding: .15rem .25rem;
+  }
+  .tbl-input {
+    width: 100%; border: none; outline: none;
+    font-size: .8rem; padding: .1rem .2rem;
+    background: transparent; color: #0f172a;
+  }
+  .tbl-input:focus { background: #eff6ff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="preview-wrap">
+  <div class="preview-header">
+    <div>
+      <h4><i class="bi bi-file-earmark-check"></i> {{ template.name }}</h4>
+      <div class="sub">{{ template.description or 'Inspection form preview' }}</div>
+    </div>
+    <span class="freq-badge">{{ template.frequency|title }}</span>
+  </div>
+
+  <div class="preview-body">
+    <div class="preview-notice">
+      <i class="bi bi-eye"></i>
+      <span>This is a <strong>read-only preview</strong>. Layout matches the grid editor exactly.</span>
+    </div>
+
+    {% if form_fields %}
+    <div class="form-grid">
+      {% for field in form_fields %}
+      <div class="fg-cell"
+           style="grid-column: {{ field.col }} / span {{ field.colSpan }};
+                  grid-row:    {{ field.row }} / span {{ field.rowSpan }};">
+
+        {% if field.type == 'section' %}
+          <div class="section-divider"><strong>{{ field.label }}</strong></div>
+
+        {% elif field.type == 'text' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          <input type="text" class="form-control" placeholder="{{ field.placeholder or '' }}">
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {% elif field.type == 'textarea' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          <textarea class="form-control" style="flex:1;resize:vertical;" placeholder="{{ field.placeholder or '' }}"></textarea>
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {% elif field.type == 'number' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          <input type="number" class="form-control" placeholder="{{ field.placeholder or '' }}">
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {% elif field.type == 'date' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          <input type="date" class="form-control">
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {% elif field.type == 'email' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          <input type="email" class="form-control" placeholder="{{ field.placeholder or 'name@example.com' }}">
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {% elif field.type == 'checkbox' %}
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="f_{{ loop.index }}">
+            <label class="form-check-label" for="f_{{ loop.index }}">
+              {{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}
+            </label>
+          </div>
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {% elif field.type == 'checkbox_group' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          {% for opt in field.options %}
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="cg_{{ loop.index }}_{{ loop.index0 }}">
+            <label class="form-check-label" for="cg_{{ loop.index }}_{{ loop.index0 }}">{{ opt }}</label>
+          </div>
+          {% endfor %}
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {% elif field.type == 'radio' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          {% for opt in field.options %}
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="rg_{{ loop.index }}" id="rg_{{ loop.index }}_{{ loop.index0 }}">
+            <label class="form-check-label" for="rg_{{ loop.index }}_{{ loop.index0 }}">{{ opt }}</label>
+          </div>
+          {% endfor %}
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {% elif field.type == 'select' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          <select class="form-select">
+            <option value="">-- Select --</option>
+            {% for opt in field.options %}<option>{{ opt }}</option>{% endfor %}
+          </select>
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {% elif field.type == 'image' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          <div class="upload-zone">
+            <i class="bi bi-cloud-upload"></i>
+            <span>Upload photo</span>
+          </div>
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {% elif field.type == 'signature' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          <div class="signature-box">Sign here…</div>
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {% elif field.type == 'rating' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          <div class="rating-stars" data-rating="0">
+            {% for i in range(1, 6) %}
+            <button type="button" data-val="{{ i }}" onclick="setRating(this)">★</button>
+            {% endfor %}
+          </div>
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {% elif field.type == 'label' %}
+          {% set fs_map = {'small':'0.78rem','normal':'0.9rem','large':'1.05rem','x-large':'1.25rem'} %}
+          <div style="font-size:{{ fs_map.get(field.font_size or 'normal', '0.9rem') }};
+                      font-weight:{{ field.font_weight or 'normal' }};
+                      color:#374151;line-height:1.5;white-space:pre-wrap;overflow:hidden;height:100%;">{{ field.text_content or 'Label text' }}</div>
+
+        {% elif field.type == 'button_submit' %}
+          <button type="button" class="btn btn-primary w-100" onclick="handleSubmit(this)">
+            <i class="bi bi-send-fill"></i> {{ field.btn_label or 'Submit Form' }}
+          </button>
+
+        {% elif field.type == 'button_print' %}
+          <button type="button" class="btn btn-outline-secondary w-100" onclick="window.print()">
+            <i class="bi bi-printer-fill"></i> {{ field.btn_label or 'Print Form' }}
+          </button>
+
+        {% elif field.type == 'button_email' %}
+          <button type="button" class="btn btn-outline-primary w-100" onclick="handleEmail(this)">
+            <i class="bi bi-envelope-fill"></i> {{ field.btn_label or 'Email Form' }}
+          </button>
+
+        {% elif field.type == 'table' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          <div style="overflow:auto;flex:1;min-height:0;">
+            <table class="tbl-field">
+              <thead>
+                <tr>
+                  {% for hdr in (field.col_headers or ['Column 1','Column 2','Column 3']) %}
+                  <th>{{ hdr }}</th>
+                  {% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in range(field.table_rows or 3) %}
+                <tr>
+                  {% for hdr in (field.col_headers or ['Column 1','Column 2','Column 3']) %}
+                  <td><input type="text" class="tbl-input"></td>
+                  {% endfor %}
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="preview-footer">
+      <button onclick="window.close()" class="btn-back">
+        <i class="bi bi-x-lg"></i> Close Preview
+      </button>
+      <button class="btn btn-primary" disabled>
+        <i class="bi bi-send"></i> Submit Inspection
+      </button>
+    </div>
+
+    {% else %}
+    <div class="empty-form">
+      <i class="bi bi-layout-text-sidebar-reverse"></i>
+      <strong>No fields yet</strong>
+      <p class="mb-3" style="font-size:.84rem;">
+        This template has no form fields. Open the editor to add some.
+      </p>
+      <button onclick="window.close()" class="btn-back">
+        <i class="bi bi-x-lg"></i> Close Preview
+      </button>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function setRating(btn) {
+  const group = btn.closest('.rating-stars');
+  const val   = parseInt(btn.dataset.val);
+  group.dataset.rating = val;
+  group.querySelectorAll('button').forEach(b => {
+    b.classList.toggle('on', parseInt(b.dataset.val) <= val);
+  });
+}
+
+function handleSubmit(btn) {
+  btn.disabled = true;
+  btn.innerHTML = '<i class="bi bi-check-circle-fill"></i> Submitted!';
+  btn.classList.replace('btn-primary', 'btn-success');
+  setTimeout(() => {
+    btn.disabled = false;
+    btn.innerHTML = btn.dataset.orig || btn.innerHTML;
+    btn.classList.replace('btn-success', 'btn-primary');
+  }, 2500);
+}
+
+function handleEmail(btn) {
+  // In a real inspection this would POST and email; here it shows a toast.
+  const toast = document.getElementById('emailToast');
+  toast.style.display = 'flex';
+  setTimeout(() => { toast.style.display = 'none'; }, 3000);
+}
+</script>
+
+<!-- email toast -->
+<div id="emailToast" style="display:none;position:fixed;bottom:1.5rem;right:1.5rem;
+     background:#16a34a;color:#fff;padding:.65rem 1.1rem;border-radius:8px;
+     align-items:center;gap:.5rem;font-size:.85rem;font-weight:600;
+     box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:9999;">
+  <i class="bi bi-check-circle-fill"></i> Form emailed successfully
+</div>
+{% endblock %}
