@@ -25,6 +25,11 @@ def create_app(config_name='default'):
     login_manager.login_message      = 'Please log in to access this page.'
     login_manager.login_message_category = 'info'
 
+    # Register csrf_token() as an app-wide Jinja2 global so templates that
+    # render manual forms (no WTForms object) can still inject the CSRF token.
+    from flask_wtf.csrf import generate_csrf
+    app.jinja_env.globals['csrf_token'] = generate_csrf
+
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
     from app.routes import auth, dashboard, inspections, templates, reports, facilities

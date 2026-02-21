@@ -13,7 +13,6 @@
 {% endblock %}
 {% block content %}
 <form method="post" enctype="multipart/form-data" id="inspectionForm">
-  {{ csrf_token() | safe }}
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
   {# Sticky toolbar #}
