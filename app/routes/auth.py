@@ -1,5 +1,6 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, abort
 from flask_login import login_user, logout_user, login_required, current_user
+from urllib.parse import urlparse
 from app import db
 from app.models.user import User
 from app.utils.forms import LoginForm, UserForm
@@ -7,24 +8,44 @@ from app.utils.decorators import admin_required
 
 bp = Blueprint('auth', __name__, url_prefix='/auth')
 
+
+def _safe_next(next_url: str | None) -> str:
+    """
+    Validate that the redirect target is a relative URL on this host.
+    Returns the safe URL, or the dashboard index if the URL is external/invalid.
+    This prevents open-redirect attacks where an attacker crafts a login link
+    containing next=https://evil.com to hijack post-login redirects.
+    """
+    if not next_url:
+        return url_for('dashboard.index')
+    parsed = urlparse(next_url)
+    # Reject any URL that specifies a network location (external host) or scheme
+    if parsed.netloc or parsed.scheme:
+        return url_for('dashboard.index')
+    return next_url
+
+
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard.index'))
-    
+
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data).first()
-        
+
         if user and user.check_password(form.password.data):
             login_user(user)
-            next_page = request.args.get('next')
+            # Use validated next URL — never redirect blindly to request.args['next']
+            next_page = _safe_next(request.args.get('next'))
             flash(f'Welcome back, {user.username}!', 'success')
-            return redirect(next_page or url_for('dashboard.index'))
+            return redirect(next_page)
         else:
+            # Generic message — don't reveal whether the username exists
             flash('Invalid credentials. Please try again.', 'danger')
-    
+
     return render_template('auth/login.html', form=form)
+
 
 @bp.route('/logout')
 @login_required
@@ -33,6 +54,7 @@ def logout():
     flash('Successfully logged out.', 'success')
     return redirect(url_for('auth.login'))
 
+
 @bp.route('/users')
 @login_required
 @admin_required
@@ -40,12 +62,13 @@ def list_users():
     users = User.query.order_by(User.created_at.desc()).all()
     return render_template('auth/users.html', users=users)
 
+
 @bp.route('/users/new', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def create_user():
     form = UserForm()
-    
+
     if form.validate_on_submit():
         user = User(
             username=form.username.data,
@@ -53,14 +76,13 @@ def create_user():
             role=form.role.data
         )
         user.set_password(form.password.data)
-        
         db.session.add(user)
         db.session.commit()
-        
         flash(f'User {user.username} created successfully.', 'success')
         return redirect(url_for('auth.list_users'))
-    
+
     return render_template('auth/user_form.html', form=form, title='Create User')
+
 
 @bp.route('/users/<int:user_id>/edit', methods=['GET', 'POST'])
 @login_required
@@ -68,34 +90,45 @@ def create_user():
 def edit_user(user_id):
     user = User.query.get_or_404(user_id)
     form = UserForm(user=user, obj=user)
-    
+
     if form.validate_on_submit():
         user.username = form.username.data
-        user.email = form.email.data
-        user.role = form.role.data
-        
+        user.email    = form.email.data
+        user.role     = form.role.data
+
         if form.password.data:
             user.set_password(form.password.data)
-        
+
         db.session.commit()
         flash(f'User {user.username} updated successfully.', 'success')
         return redirect(url_for('auth.list_users'))
-    
+
     return render_template('auth/user_form.html', form=form, user=user, title='Edit User')
+
 
 @bp.route('/users/<int:user_id>/delete', methods=['POST'])
 @login_required
 @admin_required
 def delete_user(user_id):
     user = User.query.get_or_404(user_id)
-    
+
     if user.id == current_user.id:
         flash('Cannot delete your own account.', 'danger')
         return redirect(url_for('auth.list_users'))
-    
+
+    # Guard: block deletion if user has related records that would orphan data
+    # or violate FK constraints (inspections they conducted, issues assigned to them,
+    # or templates they created).
+    if user.inspections.count() > 0:
+        flash(
+            f'Cannot delete "{user.username}" — they have existing inspection records. '
+            'Deactivate the account instead.',
+            'danger'
+        )
+        return redirect(url_for('auth.list_users'))
+
     username = user.username
     db.session.delete(user)
     db.session.commit()
-    
     flash(f'User {username} deleted successfully.', 'success')
     return redirect(url_for('auth.list_users'))

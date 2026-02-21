@@ -1,6 +1,5 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
-from flask_wtf.csrf import generate_csrf
 from app import db
 from app.models.inspection import InspectionTemplate, ChecklistItem
 from app.utils.forms import InspectionTemplateForm, ChecklistItemForm
@@ -178,8 +177,7 @@ def form_editor(template_id):
     return render_template(
         'templates/form_editor.html',
         template=template,
-        form_schema_json=json.dumps(form_schema),
-        csrf_token=generate_csrf()
+        form_schema_json=json.dumps(form_schema)
     )
 
 
@@ -196,16 +194,28 @@ def save_form_schema(template_id):
 
     fields = data.get('fields', [])
 
+    # Hard cap on total field count to prevent oversized JSON payloads
+    MAX_FIELDS = 150
+    if len(fields) > MAX_FIELDS:
+        return jsonify({'success': False, 'error': f'Form may not exceed {MAX_FIELDS} fields.'}), 400
+
     # Basic sanitisation — ensure each field has the minimum required keys
+    # Track seen IDs to enforce uniqueness
+    seen_ids = set()
     sanitised = []
     for field in fields:
         if not isinstance(field, dict):
             continue
         if not field.get('id') or not field.get('type'):
             continue
+        # Reject duplicate field IDs
+        field_id = str(field.get('id', ''))
+        if field_id in seen_ids:
+            continue
+        seen_ids.add(field_id)
         ftype = str(field.get('type', 'text'))
         entry = {
-            'id':           str(field.get('id', '')),
+            'id':           field_id,
             'type':         ftype,
             'label':        str(field.get('label', 'Untitled'))[:255],
             'placeholder':  str(field.get('placeholder', ''))[:255],

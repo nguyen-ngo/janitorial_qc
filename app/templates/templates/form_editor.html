@@ -385,6 +385,13 @@
     </div>
   </div>
 
+  {# Schema data is stored in a data-attribute and parsed with JSON.parse() in JS.
+     This avoids using |safe which bypasses Jinja2 auto-escaping and could allow
+     stored XSS if the sanitiser ever lets a malicious value through. #}
+  <div id="schema-data"
+       data-schema="{{ form_schema_json | tojson }}"
+       style="display:none;"></div>
+
   <!-- PROPERTIES -->
   <div class="props-panel">
     <div class="props-empty" id="propsEmpty">
@@ -405,7 +412,8 @@
 //  CONSTANTS  (keep in sync with CSS vars)
 // ═══════════════════════════════════════════════════════════════════════════
 const SAVE_URL   = "{{ url_for('templates.save_form_schema', template_id=template.id) }}";
-const CSRF_TOKEN = "{{ csrf_token }}";
+// csrf_token() is a Flask-WTF global available in all templates
+const CSRF_TOKEN = "{{ csrf_token() }}";
 
 const COLS   = 12;
 const CELL_W = 72;   // px — matches --cell-w
@@ -486,7 +494,8 @@ function growSurface() {
 //  INIT
 // ═══════════════════════════════════════════════════════════════════════════
 (function init() {
-  const raw = {{ form_schema_json|safe }};
+  // Retrieve schema from the data-attribute (safe — no |safe bypass needed)
+  const raw = JSON.parse(document.getElementById('schema-data').dataset.schema || '[]');
   if (Array.isArray(raw) && raw.length) {
     fields = raw.map(f => ({
       ...f,

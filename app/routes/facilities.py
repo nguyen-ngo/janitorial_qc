@@ -1,6 +1,5 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required
-from flask_wtf.csrf import generate_csrf
 from app import db
 from app.models.facility import Facility, Area
 from app.utils.forms import FacilityForm, AreaForm
@@ -12,7 +11,7 @@ bp = Blueprint('facilities', __name__, url_prefix='/facilities')
 @login_required
 def list_facilities():
     facilities = Facility.query.order_by(Facility.name).all()
-    return render_template('facilities/list.html', facilities=facilities, csrf_token=generate_csrf())
+    return render_template('facilities/list.html', facilities=facilities)
 
 @bp.route('/new', methods=['GET', 'POST'])
 @login_required
@@ -42,7 +41,7 @@ def create_facility():
 def view_facility(facility_id):
     facility = Facility.query.get_or_404(facility_id)
     areas = facility.areas.order_by(Area.name).all()
-    return render_template('facilities/view.html', facility=facility, areas=areas, csrf_token=generate_csrf())
+    return render_template('facilities/view.html', facility=facility, areas=areas)
 
 @bp.route('/<int:facility_id>/edit', methods=['GET', 'POST'])
 @login_required
