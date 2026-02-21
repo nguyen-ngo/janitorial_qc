@@ -1,141 +1,264 @@
 {% extends "base.html" %}
-{% block title %}Inspection #{{ inspection.id }}{% endblock %}
+{% block title %}Inspection #{{ inspection.id }} — Results{% endblock %}
+
+{% block extra_css %}
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { font-family:'DM Sans', sans-serif; background:#eef0f4; }
+  .insp-wrap { max-width:1000px; margin:0 auto; padding:0 1rem 4rem; }
+  .insp-header {
+    background:#1a1d23; color:#fff; padding:1.1rem 1.75rem;
+    border-radius:12px 12px 0 0;
+    display:flex; align-items:center; justify-content:space-between; gap:1rem;
+  }
+  .insp-header h4 { margin:0; font-weight:600; font-size:1.05rem; }
+  .insp-header .sub { font-size:.78rem; color:#94a3b8; margin-top:.2rem; }
+  .score-badge {
+    font-size:1.5rem; font-weight:700; padding:.4rem 1rem;
+    border-radius:8px; min-width:80px; text-align:center;
+  }
+  .insp-body {
+    background:#fff; border:1px solid #e2e8f0; border-top:none;
+    border-radius:0 0 12px 12px; padding:1.75rem; overflow-x:auto;
+  }
+  .meta-row { display:flex; flex-wrap:wrap; gap:1.5rem; margin-bottom:1.5rem; padding-bottom:1rem; border-bottom:1px solid #e2e8f0; }
+  .meta-item { display:flex; flex-direction:column; }
+  .meta-item .lbl { font-size:.72rem; color:#94a3b8; font-weight:500; text-transform:uppercase; letter-spacing:.04em; }
+  .meta-item .val { font-size:.9rem; color:#0f172a; font-weight:500; margin-top:.1rem; }
+
+  /* Grid (read-only, same geometry as editor) */
+  .form-grid {
+    display:grid; grid-template-columns:repeat(12,72px);
+    grid-auto-rows:auto; gap:4px 8px; width:max-content;
+  }
+  .fg-cell { overflow:hidden; display:flex; flex-direction:column; padding:.22rem .55rem; }
+  .fg-cell .field-lbl { font-size:.74rem; font-weight:500; color:#64748b; margin-bottom:.2rem; display:block; }
+  .fg-cell .field-val {
+    font-size:.82rem; color:#0f172a; background:#f8fafc;
+    border:1px solid #e2e8f0; border-radius:5px;
+    padding:.25rem .4rem; flex:1; min-height:28px; word-break:break-word;
+    white-space:pre-wrap;
+  }
+  .fg-cell .field-val.empty { color:#94a3b8; font-style:italic; }
+  .section-divider { height:100%; display:flex; align-items:center; border-top:2px solid #e2e8f0; padding-top:.4rem; }
+  .section-divider strong { font-weight:700; color:#374151; font-size:.95rem; }
+  .rating-display { color:#f59e0b; font-size:1.1rem; letter-spacing:.05rem; }
+  .tbl-view { width:100%; border-collapse:collapse; font-size:.8rem; }
+  .tbl-view th { background:#f1f5f9; font-weight:600; color:#374151; padding:.3rem .5rem; border:1px solid #e2e8f0; font-size:.78rem; }
+  .tbl-view td { border:1px solid #e2e8f0; padding:.25rem .5rem; color:#0f172a; }
+  .photo-thumb { max-height:120px; border-radius:6px; border:1px solid #e2e8f0; }
+  .sig-img { max-height:80px; border-radius:4px; border:1px solid #e2e8f0; background:#fff; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <div>
-    <h2>Inspection Report</h2>
-    <p class="text-muted mb-0">{{ inspection.template.name }} · {{ inspection.inspection_date.strftime('%B %d, %Y %H:%M') }}</p>
-  </div>
-  <div class="d-flex gap-2">
-    {% if current_user.role in ['admin','supervisor'] %}
-    <form method="post" action="{{ url_for('inspections.delete', inspection_id=inspection.id) }}"
-          onsubmit="return confirm('Delete this inspection?')">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash3"></i> Delete</button>
-    </form>
-    {% endif %}
+<div class="insp-wrap mt-3">
+
+  {# ── Action bar ── #}
+  <div class="d-flex justify-content-between align-items-center mb-3">
     <a href="{{ url_for('inspections.index') }}" class="btn btn-sm btn-outline-secondary">
-      <i class="bi bi-arrow-left"></i> Back
+      <i class="bi bi-arrow-left"></i> Back to Inspections
     </a>
+    <div class="d-flex gap-2">
+      <button onclick="window.print()" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-printer"></i> Print
+      </button>
+      {% if current_user.role in ['admin','supervisor'] %}
+      <form method="post" action="{{ url_for('inspections.delete', inspection_id=inspection.id) }}"
+            onsubmit="return confirm('Delete this inspection permanently?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash3"></i> Delete</button>
+      </form>
+      {% endif %}
+    </div>
   </div>
-</div>
 
-{# Summary cards #}
-<div class="row mb-4">
-  <div class="col-md-3">
-    <div class="card text-center shadow-sm h-100">
-      <div class="card-body">
-        <p class="text-muted small mb-1">Overall Score</p>
-        {% if inspection.overall_score %}
-        <h2 class="fw-bold text-{{ 'success' if inspection.overall_score >= 90 else 'warning' if inspection.overall_score >= 70 else 'danger' }}">
-          {{ inspection.overall_score }}%
-        </h2>
-        {% else %}<h2 class="text-muted">—</h2>{% endif %}
+  {# ── Header ── #}
+  <div class="insp-header">
+    <div>
+      <h4><i class="bi bi-clipboard-check"></i> {{ inspection.template.name }}</h4>
+      <div class="sub">
+        {{ inspection.facility.name }}{% if inspection.area %} · {{ inspection.area.name }}{% endif %}
+        &nbsp;·&nbsp; Inspector: <strong style="color:#e2e8f0;">{{ inspection.inspector.username }}</strong>
       </div>
     </div>
-  </div>
-  <div class="col-md-3">
-    <div class="card text-center shadow-sm h-100">
-      <div class="card-body">
-        <p class="text-muted small mb-1">Status</p>
-        <span class="badge fs-6 bg-{{ 'success' if inspection.status == 'completed' else 'danger' if inspection.status == 'flagged' else 'secondary' }}">
-          {{ inspection.status|replace('_',' ')|title }}
-        </span>
+    <div class="d-flex align-items-center gap-2">
+      <span class="badge bg-{{ 'success' if inspection.status == 'completed' else 'danger' if inspection.status == 'flagged' else 'secondary' }} fs-6">
+        {{ inspection.status|replace('_',' ')|title }}
+      </span>
+      {% if inspection.overall_score is not none %}
+      <div class="score-badge bg-{{ 'success' if inspection.overall_score >= 90 else 'warning' if inspection.overall_score >= 70 else 'danger' }} text-white">
+        {{ inspection.overall_score }}%
       </div>
+      {% endif %}
     </div>
   </div>
-  <div class="col-md-3">
-    <div class="card text-center shadow-sm h-100">
-      <div class="card-body">
-        <p class="text-muted small mb-1">Facility / Area</p>
-        <p class="fw-semibold mb-0">{{ inspection.facility.name }}</p>
-        <small class="text-muted">{{ inspection.area.name if inspection.area else '—' }}</small>
-      </div>
-    </div>
-  </div>
-  <div class="col-md-3">
-    <div class="card text-center shadow-sm h-100">
-      <div class="card-body">
-        <p class="text-muted small mb-1">Inspector</p>
-        <p class="fw-semibold mb-0">{{ inspection.inspector.username }}</p>
-        {% if inspection.completed_at %}
-        <small class="text-muted">Completed {{ inspection.completed_at.strftime('%Y-%m-%d %H:%M') }}</small>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-</div>
 
-{% if inspection.notes %}
-<div class="alert alert-light border mb-4"><strong>Notes:</strong> {{ inspection.notes }}</div>
-{% endif %}
+  <div class="insp-body">
 
-{# Checklist results by category #}
-{% for category, results in categories.items() %}
-<div class="card shadow-sm mb-3">
-  <div class="card-header bg-light">
-    <h6 class="mb-0"><i class="bi bi-folder2"></i> {{ category }}</h6>
-  </div>
-  <div class="table-responsive">
-    <table class="table table-hover mb-0">
-      <thead class="table-light">
-        <tr><th>Item</th><th>Type</th><th>Result</th><th>Comments</th><th>Photo</th></tr>
-      </thead>
-      <tbody>
-        {% for r in results %}
-        <tr>
-          <td>{{ r.checklist_item.item_description }}</td>
-          <td><span class="badge bg-secondary" style="font-size:.65rem;">{{ r.checklist_item.scoring_type|replace('_',' ') }}</span></td>
-          <td>
-            {% if r.checklist_item.scoring_type == 'pass_fail' %}
-              {% if r.passed is none %}<span class="text-muted">—</span>
-              {% elif r.passed %}<span class="badge bg-success">Pass</span>
-              {% else %}<span class="badge bg-danger">Fail</span>{% endif %}
+    {# ── Meta row ── #}
+    <div class="meta-row">
+      <div class="meta-item">
+        <span class="lbl">Date</span>
+        <span class="val">{{ inspection.inspection_date.strftime('%B %d, %Y %H:%M') }}</span>
+      </div>
+      {% if inspection.completed_at %}
+      <div class="meta-item">
+        <span class="lbl">Completed</span>
+        <span class="val">{{ inspection.completed_at.strftime('%B %d, %Y %H:%M') }}</span>
+      </div>
+      {% endif %}
+      <div class="meta-item">
+        <span class="lbl">Template</span>
+        <span class="val">{{ inspection.template.name }}</span>
+      </div>
+      <div class="meta-item">
+        <span class="lbl">Frequency</span>
+        <span class="val">{{ inspection.template.frequency|title }}</span>
+      </div>
+    </div>
+
+    {# ── Form field responses ── #}
+    {% if form_fields %}
+    <div class="form-grid">
+      {% for field in form_fields %}
+      {% set fid  = field.id %}
+      {% set val  = form_data.get(fid) %}
+
+      <div class="fg-cell"
+           style="grid-column: {{ field.col }} / span {{ field.colSpan }};
+                  grid-row:    {{ field.row }} / span {{ field.rowSpan }};">
+
+        {% if field.type == 'section' %}
+          <div class="section-divider"><strong>{{ field.label }}</strong></div>
+
+        {% elif field.type == 'label' %}
+          {% set fs_map = {'small':'0.78rem','normal':'0.9rem','large':'1.05rem','x-large':'1.25rem'} %}
+          <div style="font-size:{{ fs_map.get(field.font_size or 'normal','0.9rem') }};
+                      font-weight:{{ field.font_weight or 'normal' }};color:#374151;
+                      line-height:1.5;white-space:pre-wrap;overflow:hidden;height:100%;">
+            {{ field.text_content or '' }}
+          </div>
+
+        {% elif field.type in ('button_submit','button_print','button_email') %}
+          {# not shown in read-only view #}
+
+        {% elif field.type == 'image' %}
+          <span class="field-lbl">{{ field.label }}</span>
+          {% if val %}
+          <a href="{{ url_for('static', filename=val) }}" target="_blank">
+            <img src="{{ url_for('static', filename=val) }}" class="photo-thumb" alt="Photo">
+          </a>
+          {% else %}
+          <div class="field-val empty">No photo uploaded</div>
+          {% endif %}
+
+        {% elif field.type == 'signature' %}
+          <span class="field-lbl">{{ field.label }}</span>
+          {% if val and val.startswith('data:') %}
+          <img src="{{ val }}" class="sig-img" alt="Signature">
+          {% else %}
+          <div class="field-val empty">No signature</div>
+          {% endif %}
+
+        {% elif field.type == 'rating' %}
+          <span class="field-lbl">{{ field.label }}</span>
+          <div class="field-val">
+            {% if val %}
+            <span class="rating-display">
+              {% for i in range(1, 6) %}{{ '★' if i <= (val|int) else '☆' }}{% endfor %}
+            </span>
+            <span class="text-muted ms-1" style="font-size:.75rem;">({{ val }}/5)</span>
             {% else %}
-              {% if r.score is not none %}<strong>{{ r.score }}</strong>
-              {% else %}<span class="text-muted">—</span>{% endif %}
+            <span class="empty">Not rated</span>
             {% endif %}
-          </td>
-          <td><small class="text-muted">{{ r.comments or '—' }}</small></td>
-          <td>
-            {% if r.photo_path %}
-            <a href="{{ url_for('static', filename=r.photo_path) }}" target="_blank">
-              <img src="{{ url_for('static', filename=r.photo_path) }}" style="max-height:40px;" class="img-thumbnail">
-            </a>
-            {% else %}—{% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-{% endfor %}
+          </div>
 
-{# Issues #}
-{% if issues %}
-<div class="card shadow-sm mt-4">
-  <div class="card-header bg-danger text-white">
-    <h6 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Issues Logged ({{ issues|length }})</h6>
-  </div>
-  <div class="table-responsive">
-    <table class="table table-hover mb-0">
-      <thead class="table-light">
-        <tr><th>Severity</th><th>Area</th><th>Description</th><th>Status</th><th></th></tr>
-      </thead>
-      <tbody>
-        {% for issue in issues %}
-        <tr>
-          <td><span class="badge bg-{{ 'danger' if issue.severity in ['critical','high'] else 'warning text-dark' if issue.severity == 'medium' else 'secondary' }}">{{ issue.severity|title }}</span></td>
-          <td>{{ issue.area.name }}</td>
-          <td>{{ issue.description[:80] }}{% if issue.description|length > 80 %}…{% endif %}</td>
-          <td><span class="badge bg-{{ 'success' if issue.status == 'resolved' else 'warning text-dark' if issue.status == 'in_progress' else 'secondary' }}">{{ issue.status|replace('_',' ')|title }}</span></td>
-          <td><a href="{{ url_for('issues.view', issue_id=issue.id) }}" class="btn btn-sm btn-outline-secondary">View</a></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+        {% elif field.type == 'checkbox' %}
+          <span class="field-lbl">{{ field.label }}</span>
+          <div class="field-val">
+            {% if val == 'true' %}
+            <span class="text-success"><i class="bi bi-check-circle-fill"></i> Checked</span>
+            {% else %}
+            <span class="text-muted"><i class="bi bi-circle"></i> Unchecked</span>
+            {% endif %}
+          </div>
+
+        {% elif field.type == 'checkbox_group' %}
+          <span class="field-lbl">{{ field.label }}</span>
+          <div class="field-val">
+            {% if val %}
+              {% for item in (val if val is iterable and val is not string else []) %}
+              <span class="badge bg-primary me-1">{{ item }}</span>
+              {% else %}
+              <span class="empty">None selected</span>
+              {% endfor %}
+            {% else %}
+            <span class="empty">None selected</span>
+            {% endif %}
+          </div>
+
+        {% elif field.type == 'table' %}
+          <span class="field-lbl">{{ field.label }}</span>
+          {% if val and val is iterable and val is not string %}
+          <div style="overflow:auto;">
+            <table class="tbl-view">
+              <thead><tr>
+                {% for hdr in (field.col_headers or ['Column 1']) %}<th>{{ hdr }}</th>{% endfor %}
+              </tr></thead>
+              <tbody>
+                {% for row in val %}
+                <tr>
+                  {% for hdr in (field.col_headers or ['Column 1']) %}
+                  <td>{{ row.get(hdr, '') }}</td>
+                  {% endfor %}
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="field-val empty">No data</div>
+          {% endif %}
+
+        {% else %}
+          {# text, textarea, number, date, email, radio, select ── #}
+          <span class="field-lbl">{{ field.label }}</span>
+          <div class="field-val {{ 'empty' if not val }}">{{ val or 'Not answered' }}</div>
+        {% endif %}
+
+      </div>
+      {% endfor %}
+    </div>
+
+    {% else %}
+    <p class="text-muted">No form fields found for this template.</p>
+    {% endif %}
+
+    {# ── Issues ── #}
+    {% if issues %}
+    <hr class="mt-4">
+    <h6 class="text-danger"><i class="bi bi-exclamation-triangle"></i> Issues Logged ({{ issues|length }})</h6>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover">
+        <thead class="table-light">
+          <tr><th>Severity</th><th>Area</th><th>Description</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for issue in issues %}
+          <tr>
+            <td><span class="badge bg-{{ 'danger' if issue.severity in ['critical','high'] else 'warning text-dark' if issue.severity == 'medium' else 'secondary' }}">{{ issue.severity|title }}</span></td>
+            <td>{{ issue.area.name }}</td>
+            <td>{{ issue.description[:80] }}{% if issue.description|length > 80 %}…{% endif %}</td>
+            <td><span class="badge bg-{{ 'success' if issue.status == 'resolved' else 'warning text-dark' if issue.status == 'in_progress' else 'secondary' }}">{{ issue.status|replace('_',' ')|title }}</span></td>
+            <td><a href="{{ url_for('issues.view', issue_id=issue.id) }}" class="btn btn-sm btn-outline-secondary">View</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
   </div>
 </div>
-{% endif %}
 {% endblock %}

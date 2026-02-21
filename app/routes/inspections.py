@@ -1,4 +1,5 @@
 import os
+import json
 import uuid
 from datetime import datetime
 from flask import (Blueprint, render_template, redirect, url_for,
@@ -17,6 +18,12 @@ bp = Blueprint('inspections', __name__, url_prefix='/inspections')
 
 ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif'}
 
+INPUT_FIELD_TYPES = {
+    'text', 'textarea', 'number', 'date', 'email',
+    'checkbox', 'checkbox_group', 'radio', 'select',
+    'rating', 'signature', 'image', 'table'
+}
+
 
 def _save_photo(file_obj, subfolder='inspection_photos'):
     """Save an uploaded photo; return the relative path or None."""
@@ -25,63 +32,133 @@ def _save_photo(file_obj, subfolder='inspection_photos'):
     ext = file_obj.filename.rsplit('.', 1)[-1].lower()
     if ext not in ALLOWED_EXTENSIONS:
         return None
-    filename  = f"{uuid.uuid4().hex}.{ext}"
-    dest_dir  = os.path.join(current_app.config['UPLOAD_FOLDER'], subfolder)
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    dest_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], subfolder)
     os.makedirs(dest_dir, exist_ok=True)
     file_obj.save(os.path.join(dest_dir, filename))
     return f"uploads/{subfolder}/{filename}"
 
 
-def _compute_score(inspection):
+def _collect_form_responses(form_fields):
     """
-    Weighted average of all scored checklist results.
-    pass_fail  → 100 if passed else 0
-    rating_5   → (score / 5)  * 100
-    rating_10  → (score / 10) * 100
-    Returns a Decimal-compatible float or None if no results.
+    Walk the submitted form data and collect responses keyed by field ID.
+    Returns a dict: { field_id: value_or_list_or_path }
+    Photo uploads are saved to disk; their path is stored as the value.
     """
-    results = inspection.results.join(ChecklistItem).all()
-    if not results:
+    responses = {}
+    for field in form_fields:
+        fid   = field['id']
+        ftype = field['type']
+
+        if ftype in ('label', 'section', 'button_submit', 'button_print', 'button_email'):
+            continue  # display-only, nothing to capture
+
+        key = f"field_{fid}"
+
+        if ftype == 'checkbox':
+            responses[fid] = 'true' if request.form.get(key) else 'false'
+
+        elif ftype == 'checkbox_group':
+            responses[fid] = request.form.getlist(key)
+
+        elif ftype == 'image':
+            photo_file = request.files.get(key)
+            path = _save_photo(photo_file, subfolder='inspection_photos')
+            responses[fid] = path or ''
+
+        elif ftype == 'table':
+            cols = field.get('col_headers') or ['Column 1']
+            rows = int(field.get('table_rows') or 3)
+            table_data = []
+            for r in range(rows):
+                row_data = {}
+                for c_idx, col in enumerate(cols):
+                    cell_key = f"{key}_r{r}_c{c_idx}"
+                    row_data[col] = request.form.get(cell_key, '')
+                table_data.append(row_data)
+            responses[fid] = table_data
+
+        elif ftype == 'rating':
+            responses[fid] = request.form.get(key, '0')
+
+        else:
+            # text, textarea, number, date, email, radio, select, signature
+            responses[fid] = request.form.get(key, '')
+
+    return responses
+
+
+def _compute_score_from_form(form_fields, responses):
+    """
+    Derive an overall score from rating fields and checkbox pass/fail fields.
+    Returns a float 0–100 or None if the form has no scoreable fields.
+    """
+    scoreable = [f for f in form_fields if f['type'] in ('rating', 'checkbox', 'radio')]
+    if not scoreable:
         return None
 
-    total_weight = 0.0
-    weighted_sum = 0.0
+    total, earned = 0, 0
+    for field in scoreable:
+        fid = field['id']
+        val = responses.get(fid, '')
 
-    for r in results:
-        item   = r.checklist_item
-        weight = float(item.weight or 1.0)
+        if field['type'] == 'rating':
+            try:
+                v = int(val)
+                earned += v
+                total  += 5   # max rating is 5 stars
+            except (ValueError, TypeError):
+                total += 5
 
-        if item.scoring_type == 'pass_fail':
-            pts = 100.0 if r.passed else 0.0
-        elif item.scoring_type == 'rating_5':
-            pts = (float(r.score) / 5.0 * 100.0) if r.score is not None else 0.0
-        elif item.scoring_type == 'rating_10':
-            pts = (float(r.score) / 10.0 * 100.0) if r.score is not None else 0.0
-        else:
-            pts = 100.0 if r.passed else 0.0
+        elif field['type'] == 'checkbox':
+            total  += 1
+            if val == 'true':
+                earned += 1
 
-        weighted_sum  += pts * weight
-        total_weight  += weight
+        elif field['type'] == 'radio':
+            # Options that look like pass/yes/ok score 1; fail/no/na score 0
+            total += 1
+            if val.lower() in ('pass', 'yes', 'ok', 'good', 'acceptable', 'compliant'):
+                earned += 1
 
-    return round(weighted_sum / total_weight, 2) if total_weight else None
+    return round((earned / total) * 100, 2) if total else None
 
 
-# ── List ─────────────────────────────────────────────────────────────────────
+def _validate_required(form_fields, responses):
+    """Return a list of labels for required fields that have empty responses."""
+    missing = []
+    for field in form_fields:
+        if not field.get('required'):
+            continue
+        ftype = field['type']
+        if ftype in ('label', 'section', 'button_submit', 'button_print', 'button_email'):
+            continue
+        val = responses.get(field['id'])
+        empty = (
+            val is None
+            or val == ''
+            or val == 'false'
+            or val == '0'
+            or val == []
+        )
+        if empty:
+            missing.append(field.get('label', 'Untitled field'))
+    return missing
+
+
+# ── List ──────────────────────────────────────────────────────────────────────
 
 @bp.route('/')
 @login_required
 def index():
     page = request.args.get('page', 1, type=int)
-
     q = Inspection.query.order_by(Inspection.inspection_date.desc())
 
-    # Inspectors only see their own
     if current_user.role == 'inspector':
         q = q.filter(Inspection.inspector_id == current_user.id)
 
-    # Optional filters
     status_filter   = request.args.get('status', '')
-    facility_filter = request.args.get('facility_id', '', type=str)
+    facility_filter = request.args.get('facility_id', '')
     if status_filter:
         q = q.filter(Inspection.status == status_filter)
     if facility_filter.isdigit():
@@ -110,34 +187,31 @@ def start():
     form.template_id.choices = [(t.id, t.name) for t in templates]
     form.facility_id.choices = [(f.id, f.name) for f in facilities]
 
-    # Area choices populated via AJAX based on selected facility
     selected_fid = form.facility_id.data or (facilities[0].id if facilities else None)
     areas = Area.query.filter_by(facility_id=selected_fid).order_by(Area.name).all() if selected_fid else []
     form.area_id.choices = [(0, '— No specific area —')] + [(a.id, a.name) for a in areas]
 
     if form.validate_on_submit():
+        template = InspectionTemplate.query.get_or_404(form.template_id.data)
+
+        # Guard: template must have a form built in the form editor
+        if not template.get_form_schema():
+            flash('This template has no form fields yet. Please build the form in the template editor first.', 'warning')
+            return redirect(url_for('inspections.start'))
+
         inspection = Inspection(
-            template_id  = form.template_id.data,
-            facility_id  = form.facility_id.data,
-            area_id      = form.area_id.data or None,
-            inspector_id = current_user.id,
+            template_id     = template.id,
+            facility_id     = form.facility_id.data,
+            area_id         = form.area_id.data or None,
+            inspector_id    = current_user.id,
             inspection_date = datetime.utcnow(),
-            status       = 'in_progress',
-            notes        = form.notes.data or None,
+            status          = 'in_progress',
+            notes           = form.notes.data or None,
         )
         db.session.add(inspection)
-        db.session.flush()  # get inspection.id
-
-        # Pre-create blank InspectionResult rows for every checklist item
-        template = InspectionTemplate.query.get(form.template_id.data)
-        for item in template.checklist_items.order_by(ChecklistItem.display_order).all():
-            db.session.add(InspectionResult(
-                inspection_id    = inspection.id,
-                checklist_item_id = item.id,
-            ))
-
         db.session.commit()
-        flash(f'Inspection started. Complete each item below.', 'success')
+
+        flash('Inspection started. Fill in the form below and submit when complete.', 'info')
         return redirect(url_for('inspections.execute', inspection_id=inspection.id))
 
     return render_template('inspections/start.html', form=form, facilities=facilities)
@@ -152,14 +226,13 @@ def areas_for_facility(facility_id):
     return jsonify([{'id': a.id, 'name': a.name} for a in areas])
 
 
-# ── Execute ───────────────────────────────────────────────────────────────────
+# ── Execute — render and submit the template form ─────────────────────────────
 
 @bp.route('/<int:inspection_id>/execute', methods=['GET', 'POST'])
 @login_required
 def execute(inspection_id):
     inspection = Inspection.query.get_or_404(inspection_id)
 
-    # Inspectors can only work on their own inspections
     if current_user.role == 'inspector' and inspection.inspector_id != current_user.id:
         flash('Access denied.', 'danger')
         return redirect(url_for('inspections.index'))
@@ -167,82 +240,85 @@ def execute(inspection_id):
     if inspection.status == 'completed':
         return redirect(url_for('inspections.view', inspection_id=inspection_id))
 
-    # Ordered checklist items with their result rows
-    results = (
-        InspectionResult.query
-        .join(ChecklistItem)
-        .filter(InspectionResult.inspection_id == inspection_id)
-        .order_by(ChecklistItem.display_order)
-        .all()
-    )
+    template    = inspection.template
+    form_fields = template.get_form_schema()
+
+    # Sort fields by grid position (row then col) for logical reading order
+    form_fields = sorted(form_fields, key=lambda f: (f.get('row', 0), f.get('col', 0)))
+
+    # Load any previously saved draft responses
+    saved_responses = {}
+    if inspection.notes:
+        try:
+            parsed = json.loads(inspection.notes)
+            if isinstance(parsed, dict) and '_form_data' in parsed:
+                saved_responses = parsed['_form_data']
+        except (json.JSONDecodeError, TypeError):
+            pass
 
     if request.method == 'POST':
-        action = request.form.get('action', 'save')
+        action = request.form.get('action', 'submit')
 
-        for result in results:
-            item    = result.checklist_item
-            prefix  = f"item_{result.id}_"
+        # Collect all field responses from the submitted form
+        responses = _collect_form_responses(form_fields)
 
-            if item.scoring_type == 'pass_fail':
-                passed_val = request.form.get(f"{prefix}passed", '')
-                result.passed = True  if passed_val == 'pass' else \
-                                False if passed_val == 'fail' else None
-                result.score  = None
-            elif item.scoring_type in ('rating_5', 'rating_10'):
-                raw = request.form.get(f"{prefix}score", '')
-                try:
-                    result.score  = float(raw)
-                    result.passed = result.score > 0
-                except (ValueError, TypeError):
-                    result.score  = None
-                    result.passed = None
-            else:
-                result.passed = None
-                result.score  = None
-
-            result.comments = request.form.get(f"{prefix}comments", '').strip() or None
-
-            # Photo upload
-            photo_file = request.files.get(f"{prefix}photo")
-            if photo_file and photo_file.filename:
-                path = _save_photo(photo_file)
-                if path:
-                    result.photo_path = path
-
-        if action == 'complete':
-            # Validate all required-photo items have a photo
-            missing_photos = [
-                r for r in results
-                if r.checklist_item.requires_photo and not r.photo_path
-            ]
-            if missing_photos:
-                db.session.commit()
-                flash(f'{len(missing_photos)} item(s) require a photo before completing.', 'warning')
+        if action == 'submit':
+            # Validate required fields
+            missing = _validate_required(form_fields, responses)
+            if missing:
+                # Save draft so the inspector doesn't lose their work
+                _save_draft(inspection, responses)
+                flash(
+                    f'Please complete all required fields before submitting: '
+                    f'{", ".join(missing[:5])}{"…" if len(missing) > 5 else ""}',
+                    'warning'
+                )
                 return redirect(url_for('inspections.execute', inspection_id=inspection_id))
 
-            inspection.overall_score = _compute_score(inspection)
+            # Compute score and mark complete
+            score = _compute_score_from_form(form_fields, responses)
+            inspection.overall_score = score
             inspection.status        = 'completed'
             inspection.completed_at  = datetime.utcnow()
+
+            # Persist the final form data alongside any inspector notes
+            _save_responses(inspection, responses)
             db.session.commit()
-            flash('Inspection completed successfully!', 'success')
+
+            flash('Inspection submitted successfully!', 'success')
             return redirect(url_for('inspections.view', inspection_id=inspection_id))
 
-        db.session.commit()
-        flash('Progress saved.', 'success')
-        return redirect(url_for('inspections.execute', inspection_id=inspection_id))
-
-    # Count answered vs total
-    answered = sum(1 for r in results if r.passed is not None or r.score is not None)
-    staff    = User.query.filter(User.role.in_(['supervisor', 'inspector'])).order_by(User.username).all()
+        else:  # save draft
+            _save_draft(inspection, responses)
+            db.session.commit()
+            flash('Draft saved. You can continue filling in the form later.', 'success')
+            return redirect(url_for('inspections.execute', inspection_id=inspection_id))
 
     return render_template('inspections/execute.html',
                            inspection=inspection,
-                           results=results,
-                           answered=answered,
-                           staff=staff)
+                           form_fields=form_fields,
+                           saved_responses=saved_responses)
 
 
-# ── View (completed) ──────────────────────────────────────────────────────────
+def _save_responses(inspection, responses):
+    """Persist final form responses into inspection.notes as JSON."""
+    existing = {}
+    if inspection.notes:
+        try:
+            existing = json.loads(inspection.notes)
+        except (json.JSONDecodeError, TypeError):
+            existing = {'_inspector_notes': inspection.notes}
+    existing['_form_data'] = responses
+    inspection.notes = json.dumps(existing)
+
+
+def _save_draft(inspection, responses):
+    """Save a draft of form responses — same storage as final, just status stays in_progress."""
+    _save_responses(inspection, responses)
+    db.session.commit()
+
+
+# ── View ──────────────────────────────────────────────────────────────────────
 
 @bp.route('/<int:inspection_id>')
 @login_required
@@ -253,25 +329,26 @@ def view(inspection_id):
         flash('Access denied.', 'danger')
         return redirect(url_for('inspections.index'))
 
-    results = (
-        InspectionResult.query
-        .join(ChecklistItem)
-        .filter(InspectionResult.inspection_id == inspection_id)
-        .order_by(ChecklistItem.display_order)
-        .all()
-    )
+    template    = inspection.template
+    form_fields = sorted(template.get_form_schema(),
+                         key=lambda f: (f.get('row', 0), f.get('col', 0)))
 
-    # Group by category
-    categories = {}
-    for r in results:
-        cat = r.checklist_item.category or 'General'
-        categories.setdefault(cat, []).append(r)
+    # Decode saved responses
+    form_data = {}
+    if inspection.notes:
+        try:
+            parsed = json.loads(inspection.notes)
+            if isinstance(parsed, dict):
+                form_data = parsed.get('_form_data', {})
+        except (json.JSONDecodeError, TypeError):
+            pass
 
     issues = inspection.issues.order_by(Issue.reported_at.desc()).all()
 
     return render_template('inspections/view.html',
                            inspection=inspection,
-                           categories=categories,
+                           form_fields=form_fields,
+                           form_data=form_data,
                            issues=issues)
 
 
@@ -286,9 +363,9 @@ def flag_issue(inspection_id):
         flash('Access denied.', 'danger')
         return redirect(url_for('inspections.index'))
 
-    form = IssueForm()
+    form  = IssueForm()
     areas = Area.query.filter_by(facility_id=inspection.facility_id).order_by(Area.name).all()
-    staff = User.query.filter(User.role.in_(['supervisor','inspector'])).order_by(User.username).all()
+    staff = User.query.filter(User.role.in_(['supervisor', 'inspector'])).order_by(User.username).all()
 
     form.area_id.choices     = [(a.id, a.name) for a in areas]
     form.assigned_to.choices = [(0, '— Unassigned —')] + [(u.id, u.username) for u in staff]
@@ -307,7 +384,6 @@ def flag_issue(inspection_id):
         )
         db.session.add(issue)
 
-        # Auto-flag the inspection if a high/critical issue is logged
         if form.severity.data in ('high', 'critical') and inspection.status != 'completed':
             inspection.status = 'flagged'
 

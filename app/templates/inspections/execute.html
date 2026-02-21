@@ -1,161 +1,458 @@
 {% extends "base.html" %}
-{% block title %}Execute Inspection{% endblock %}
+{% block title %}{{ inspection.template.name }} — Inspection{% endblock %}
+
 {% block extra_css %}
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  .item-card { border-left: 4px solid #dee2e6; transition: border-color .2s; }
-  .item-card.answered { border-left-color: #198754; }
-  .item-card.flagged  { border-left-color: #dc3545; }
-  .pass-fail-group .btn-check:checked + .btn-outline-success { background:#198754; color:#fff; }
-  .pass-fail-group .btn-check:checked + .btn-outline-danger  { background:#dc3545; color:#fff; }
-  .progress-bar-label { font-size:.75rem; font-weight:600; }
-  .sticky-toolbar { position:sticky; top:56px; z-index:20; background:#fff; border-bottom:1px solid #dee2e6; padding:.6rem 1rem; }
+  body { font-family: 'DM Sans', sans-serif; background: #eef0f4; }
+
+  .insp-wrap  { max-width: 1000px; margin: 0 auto; padding: 0 1rem 4rem; }
+
+  .insp-header {
+    background: #1a1d23; color: #fff;
+    padding: 1.1rem 1.75rem;
+    border-radius: 12px 12px 0 0;
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  }
+  .insp-header h4  { margin:0; font-weight:600; font-size:1.05rem; }
+  .insp-header .sub{ font-size:.78rem; color:#94a3b8; margin-top:.2rem; }
+  .freq-badge {
+    font-size:.72rem; background:rgba(255,255,255,.15);
+    padding:.28rem .65rem; border-radius:20px; font-weight:500; white-space:nowrap;
+  }
+
+  .insp-body {
+    background:#fff; border:1px solid #e2e8f0; border-top:none;
+    border-radius: 0 0 12px 12px; padding:1.75rem; overflow-x:auto;
+  }
+
+  /* ── 12-col grid (matches form editor exactly) ── */
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 72px);
+    grid-auto-rows: auto;
+    gap: 4px 8px;
+    width: max-content;
+  }
+  .fg-cell {
+    overflow:hidden; display:flex; flex-direction:column; padding:.22rem .55rem;
+  }
+  .fg-cell .field-lbl {
+    font-size:.74rem; font-weight:500; color:#64748b;
+    margin-bottom:.2rem; display:block;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex-shrink:0;
+  }
+  .required-mark { color:#dc2626; }
+  .help-text { font-size:.72rem; color:#64748b; margin-top:.18rem; flex-shrink:0; }
+  .field-error { font-size:.72rem; color:#dc2626; margin-top:.18rem; }
+
+  .fg-cell .form-control,
+  .fg-cell .form-select {
+    font-size:.76rem; padding:.2rem .4rem;
+    border-color:#e2e8f0; background:#f8fafc;
+  }
+  .fg-cell .form-control:focus,
+  .fg-cell .form-select:focus  { border-color:#2563eb; background:#fff; box-shadow:none; }
+  .fg-cell textarea.form-control { resize:vertical; flex:1; min-height:60px; }
+  .fg-cell .form-check-label { font-size:.76rem; color:#64748b; }
+  .fg-cell .form-check-input  { margin-top:.18rem; }
+  .fg-cell .form-check        { margin-bottom:.1rem; }
+
+  .upload-zone {
+    border:2px dashed #cbd5e1; border-radius:6px; flex:1; min-height:60px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    color:#64748b; background:#f8fafc; cursor:pointer; font-size:.74rem; gap:.2rem;
+    transition:border-color .18s, background .18s; position:relative;
+  }
+  .upload-zone:hover        { border-color:#2563eb; background:#eff6ff; color:#2563eb; }
+  .upload-zone input[type=file] {
+    position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%;
+  }
+  .upload-zone i { font-size:1.1rem; }
+  .upload-zone .file-name { font-size:.7rem; color:#2563eb; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  .signature-pad-wrap {
+    flex:1; min-height:80px; border-radius:6px; border:1px solid #e2e8f0;
+    background:#f8fafc; position:relative; overflow:hidden;
+  }
+  .signature-pad-wrap canvas { width:100%; height:100%; cursor:crosshair; display:block; }
+  .sig-clear {
+    position:absolute; top:4px; right:4px;
+    font-size:.65rem; padding:.15rem .4rem;
+    background:rgba(255,255,255,.85); border:1px solid #cbd5e1; border-radius:4px;
+    cursor:pointer; color:#64748b;
+  }
+  .sig-clear:hover { color:#dc2626; border-color:#dc2626; }
+
+  .rating-stars { display:flex; gap:.25rem; align-items:center; padding-top:.08rem; }
+  .rating-stars button {
+    border:none; background:none; font-size:1.45rem; color:#cbd5e1;
+    cursor:pointer; padding:0; line-height:1; transition:color .12s;
+  }
+  .rating-stars button:hover,
+  .rating-stars button.on { color:#f59e0b; }
+
+  .section-divider {
+    height:100%; display:flex; align-items:center; padding:0;
+    border-top:2px solid #e2e8f0; padding-top:.4rem;
+  }
+  .section-divider strong { font-weight:700; color:#374151; font-size:.95rem; }
+
+  .tbl-field { width:100%; border-collapse:collapse; font-size:.8rem; }
+  .tbl-field th {
+    background:#f1f5f9; font-weight:600; color:#374151;
+    padding:.3rem .5rem; border:1px solid #e2e8f0; white-space:nowrap; font-size:.78rem;
+  }
+  .tbl-field td { border:1px solid #e2e8f0; padding:.15rem .25rem; }
+  .tbl-input { width:100%; border:none; outline:none; font-size:.8rem; padding:.1rem .2rem; background:transparent; }
+  .tbl-input:focus { background:#eff6ff; }
+
+  /* existing photo thumbnail */
+  .photo-thumb { max-height:60px; border-radius:4px; margin-bottom:.25rem; }
+
+  /* sticky footer bar */
+  .insp-footer {
+    position:sticky; bottom:0; background:#1a1d23;
+    border-radius:0 0 12px 12px;
+    padding:.75rem 1.75rem;
+    display:flex; align-items:center; justify-content:space-between; gap:1rem;
+    margin-top:1.5rem;
+  }
+  .insp-footer .meta { color:#94a3b8; font-size:.8rem; }
+  .insp-footer .meta strong { color:#e2e8f0; }
 </style>
 {% endblock %}
+
 {% block content %}
-<form method="post" enctype="multipart/form-data" id="inspectionForm">
+<div class="insp-wrap mt-3">
+<form method="post" enctype="multipart/form-data" id="inspectionForm" novalidate>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-  {# Sticky toolbar #}
-  <div class="sticky-toolbar d-flex align-items-center gap-3 mb-4">
-    <div class="flex-grow-1">
-      <h5 class="mb-0">{{ inspection.template.name }}</h5>
-      <small class="text-muted">{{ inspection.facility.name }}{% if inspection.area %} · {{ inspection.area.name }}{% endif %}</small>
-    </div>
-    <div class="text-center" style="min-width:120px;">
-      <div class="progress" style="height:8px;">
-        <div class="progress-bar bg-success" style="width:{{ (answered / results|length * 100)|int if results else 0 }}%"></div>
+  {# ── Header ── #}
+  <div class="insp-header">
+    <div>
+      <h4><i class="bi bi-clipboard-check"></i> {{ inspection.template.name }}</h4>
+      <div class="sub">
+        {{ inspection.facility.name }}
+        {% if inspection.area %} · {{ inspection.area.name }}{% endif %}
+        &nbsp;·&nbsp; Inspector: <strong style="color:#e2e8f0;">{{ inspection.inspector.username }}</strong>
       </div>
-      <span class="progress-bar-label text-muted">{{ answered }}/{{ results|length }} answered</span>
     </div>
-    <a href="{{ url_for('inspections.flag_issue', inspection_id=inspection.id) }}"
-       class="btn btn-sm btn-outline-danger">
-      <i class="bi bi-exclamation-triangle"></i> Flag Issue
-    </a>
-    <button type="submit" name="action" value="save" class="btn btn-sm btn-outline-secondary">
-      <i class="bi bi-floppy"></i> Save
-    </button>
-    <button type="submit" name="action" value="complete" class="btn btn-success"
-            onclick="return confirm('Mark this inspection as complete?')">
-      <i class="bi bi-check-circle"></i> Complete
-    </button>
+    <div class="d-flex gap-2 align-items-center">
+      <span class="freq-badge">{{ inspection.template.frequency|title }}</span>
+      <a href="{{ url_for('inspections.flag_issue', inspection_id=inspection.id) }}"
+         class="btn btn-sm btn-outline-danger btn-outline-light">
+        <i class="bi bi-exclamation-triangle"></i> Flag Issue
+      </a>
+    </div>
   </div>
 
-  {% if inspection.notes %}
-  <div class="alert alert-info py-2"><i class="bi bi-sticky"></i> <strong>Notes:</strong> {{ inspection.notes }}</div>
-  {% endif %}
+  {# ── Form body ── #}
+  <div class="insp-body">
+    {% if form_fields %}
 
-  {% set ns = namespace(current_cat='') %}
-  {% for result in results %}
-    {% set item = result.checklist_item %}
-    {% if item.category != ns.current_cat %}
-      {% set ns.current_cat = item.category %}
-      <h5 class="text-primary border-bottom pb-1 mt-4 mb-3">
-        <i class="bi bi-folder2"></i> {{ item.category or 'General' }}
-      </h5>
-    {% endif %}
+    <div class="form-grid">
+      {% for field in form_fields %}
+      {% set fid = field.id %}
+      {% set saved = saved_responses.get(fid, '') %}
 
-    {% set is_answered = result.passed is not none or result.score is not none %}
-    <div class="card shadow-sm mb-3 item-card {{ 'answered' if is_answered }}">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-start mb-2">
-          <div>
-            <span class="fw-semibold">{{ item.item_description }}</span>
-            {% if item.requires_photo %}
-            <span class="badge bg-warning text-dark ms-1"><i class="bi bi-camera"></i> Photo required</span>
-            {% endif %}
+      <div class="fg-cell"
+           style="grid-column: {{ field.col }} / span {{ field.colSpan }};
+                  grid-row:    {{ field.row }} / span {{ field.rowSpan }};">
+
+        {# ── Section label (display only) ── #}
+        {% if field.type == 'section' %}
+          <div class="section-divider"><strong>{{ field.label }}</strong></div>
+
+        {# ── Static label ── #}
+        {% elif field.type == 'label' %}
+          {% set fs_map = {'small':'0.78rem','normal':'0.9rem','large':'1.05rem','x-large':'1.25rem'} %}
+          <div style="font-size:{{ fs_map.get(field.font_size or 'normal','0.9rem') }};
+                      font-weight:{{ field.font_weight or 'normal' }};
+                      color:#374151;line-height:1.5;white-space:pre-wrap;overflow:hidden;height:100%;">
+            {{ field.text_content or '' }}
           </div>
-          <span class="badge bg-secondary text-uppercase" style="font-size:.65rem;">{{ item.scoring_type|replace('_',' ') }}</span>
-        </div>
 
-        {# ── Pass/Fail ── #}
-        {% if item.scoring_type == 'pass_fail' %}
-        <div class="pass-fail-group d-flex gap-2 mb-2">
-          <input class="btn-check" type="radio" name="item_{{ result.id }}_passed"
-                 id="pass_{{ result.id }}" value="pass" {{ 'checked' if result.passed == true }}>
-          <label class="btn btn-outline-success btn-sm" for="pass_{{ result.id }}">
-            <i class="bi bi-check-lg"></i> Pass
-          </label>
-          <input class="btn-check" type="radio" name="item_{{ result.id }}_passed"
-                 id="fail_{{ result.id }}" value="fail" {{ 'checked' if result.passed == false }}>
-          <label class="btn btn-outline-danger btn-sm" for="fail_{{ result.id }}">
-            <i class="bi bi-x-lg"></i> Fail
-          </label>
-        </div>
+        {# ── Submit / Print / Email buttons (display in preview; no action needed here) ── #}
+        {% elif field.type in ('button_submit','button_print','button_email') %}
+          {# rendered by the sticky footer instead #}
 
-        {# ── Rating 5 ── #}
-        {% elif item.scoring_type == 'rating_5' %}
-        <div class="mb-2">
-          <label class="form-label small">Rating (1–5)</label>
-          <div class="d-flex gap-2">
-            {% for v in [1,2,3,4,5] %}
-            <div class="form-check form-check-inline">
-              <input class="form-check-input" type="radio" name="item_{{ result.id }}_score"
-                     id="r5_{{ result.id }}_{{ v }}" value="{{ v }}"
-                     {{ 'checked' if result.score == v }}>
-              <label class="form-check-label" for="r5_{{ result.id }}_{{ v }}">{{ v }}</label>
-            </div>
+        {# ── Text ── #}
+        {% elif field.type == 'text' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          <input type="text" class="form-control" name="field_{{ fid }}"
+                 value="{{ saved }}" placeholder="{{ field.placeholder or '' }}"
+                 {% if field.required %}required{% endif %}>
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {# ── Textarea ── #}
+        {% elif field.type == 'textarea' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          <textarea class="form-control" name="field_{{ fid }}"
+                    placeholder="{{ field.placeholder or '' }}"
+                    {% if field.required %}required{% endif %}>{{ saved }}</textarea>
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {# ── Number ── #}
+        {% elif field.type == 'number' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          <input type="number" class="form-control" name="field_{{ fid }}"
+                 value="{{ saved }}" placeholder="{{ field.placeholder or '' }}"
+                 {% if field.required %}required{% endif %}>
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {# ── Date ── #}
+        {% elif field.type == 'date' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          <input type="date" class="form-control" name="field_{{ fid }}"
+                 value="{{ saved }}" {% if field.required %}required{% endif %}>
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {# ── Email ── #}
+        {% elif field.type == 'email' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          <input type="email" class="form-control" name="field_{{ fid }}"
+                 value="{{ saved }}" placeholder="{{ field.placeholder or 'name@example.com' }}"
+                 {% if field.required %}required{% endif %}>
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {# ── Checkbox ── #}
+        {% elif field.type == 'checkbox' %}
+          <div class="form-check mt-1">
+            <input class="form-check-input" type="checkbox" name="field_{{ fid }}"
+                   id="f_{{ fid }}" value="true" {{ 'checked' if saved == 'true' }}>
+            <label class="form-check-label" for="f_{{ fid }}">
+              {{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}
+            </label>
+          </div>
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {# ── Checkbox group ── #}
+        {% elif field.type == 'checkbox_group' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          {% for opt in field.options %}
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="field_{{ fid }}"
+                   id="cg_{{ fid }}_{{ loop.index0 }}" value="{{ opt }}"
+                   {{ 'checked' if opt in (saved if saved is iterable and saved is not string else []) }}>
+            <label class="form-check-label" for="cg_{{ fid }}_{{ loop.index0 }}">{{ opt }}</label>
+          </div>
+          {% endfor %}
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {# ── Radio ── #}
+        {% elif field.type == 'radio' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          {% for opt in field.options %}
+          <div class="form-check">
+            <input class="form-check-input" type="radio" name="field_{{ fid }}"
+                   id="rg_{{ fid }}_{{ loop.index0 }}" value="{{ opt }}"
+                   {{ 'checked' if saved == opt }}>
+            <label class="form-check-label" for="rg_{{ fid }}_{{ loop.index0 }}">{{ opt }}</label>
+          </div>
+          {% endfor %}
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {# ── Select / Dropdown ── #}
+        {% elif field.type == 'select' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          <select class="form-select" name="field_{{ fid }}" {% if field.required %}required{% endif %}>
+            <option value="">— Select —</option>
+            {% for opt in field.options %}
+            <option value="{{ opt }}" {{ 'selected' if saved == opt }}>{{ opt }}</option>
+            {% endfor %}
+          </select>
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {# ── Rating (stars) ── #}
+        {% elif field.type == 'rating' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          <div class="rating-stars" data-rating="{{ saved or 0 }}">
+            <input type="hidden" name="field_{{ fid }}" id="rating_input_{{ fid }}" value="{{ saved or 0 }}">
+            {% for i in range(1, 6) %}
+            <button type="button" data-val="{{ i }}" data-target="rating_input_{{ fid }}"
+                    class="{{ 'on' if (saved|int) >= i }}"
+                    onclick="setRating(this)">★</button>
             {% endfor %}
           </div>
-        </div>
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
 
-        {# ── Rating 10 ── #}
-        {% elif item.scoring_type == 'rating_10' %}
-        <div class="mb-2">
-          <label class="form-label small">Rating (1–10)</label>
-          <div class="d-flex flex-wrap gap-2">
-            {% for v in range(1,11) %}
-            <div class="form-check form-check-inline">
-              <input class="form-check-input" type="radio" name="item_{{ result.id }}_score"
-                     id="r10_{{ result.id }}_{{ v }}" value="{{ v }}"
-                     {{ 'checked' if result.score == v }}>
-              <label class="form-check-label" for="r10_{{ result.id }}_{{ v }}">{{ v }}</label>
-            </div>
-            {% endfor %}
+        {# ── Image / Photo upload ── #}
+        {% elif field.type == 'image' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          {% if saved %}
+          <img src="{{ url_for('static', filename=saved) }}" class="photo-thumb" alt="Uploaded photo">
+          {% endif %}
+          <div class="upload-zone">
+            <input type="file" name="field_{{ fid }}" accept="image/*"
+                   onchange="showFileName(this)">
+            <i class="bi bi-cloud-upload"></i>
+            <span>Click or drag to upload</span>
+            <span class="file-name" id="fname_{{ fid }}">
+              {% if saved %}{{ saved.split('/')[-1] }}{% endif %}
+            </span>
           </div>
-        </div>
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {# ── Signature ── #}
+        {% elif field.type == 'signature' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          <div class="signature-pad-wrap">
+            <canvas id="sig_{{ fid }}" data-field="field_{{ fid }}"></canvas>
+            <button type="button" class="sig-clear" onclick="clearSig('sig_{{ fid }}')">Clear</button>
+            <input type="hidden" name="field_{{ fid }}" id="field_{{ fid }}" value="{{ saved }}">
+          </div>
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
+        {# ── Table ── #}
+        {% elif field.type == 'table' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          <div style="overflow:auto;flex:1;min-height:0;">
+            <table class="tbl-field">
+              <thead><tr>
+                {% for hdr in (field.col_headers or ['Column 1','Column 2','Column 3']) %}
+                <th>{{ hdr }}</th>
+                {% endfor %}
+              </tr></thead>
+              <tbody>
+                {% set tbl_data = saved if saved is iterable and saved is not string else [] %}
+                {% for r in range(field.table_rows or 3) %}
+                <tr>
+                  {% set row_data = tbl_data[r] if r < tbl_data|length else {} %}
+                  {% for hdr in (field.col_headers or ['Column 1','Column 2','Column 3']) %}{% set c_idx = loop.index0 %}
+                  <td>
+                    <input type="text" class="tbl-input"
+                           name="field_{{ fid }}_r{{ r }}_c{{ c_idx }}"
+                           value="{{ row_data.get(hdr, '') }}">
+                  </td>
+                  {% endfor %}
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
         {% endif %}
-
-        <div class="row g-2">
-          <div class="col-md-6">
-            <textarea class="form-control form-control-sm" name="item_{{ result.id }}_comments"
-                      rows="2" placeholder="Comments (optional)">{{ result.comments or '' }}</textarea>
-          </div>
-          <div class="col-md-6">
-            {% if result.photo_path %}
-            <div class="mb-1">
-              <img src="{{ url_for('static', filename=result.photo_path) }}"
-                   class="img-thumbnail" style="max-height:80px;" alt="Photo">
-            </div>
-            {% endif %}
-            <input type="file" class="form-control form-control-sm"
-                   name="item_{{ result.id }}_photo" accept="image/*">
-          </div>
-        </div>
       </div>
+      {% endfor %}
     </div>
-  {% endfor %}
 
-  {# Bottom submit bar #}
-  <div class="d-flex justify-content-end gap-2 mt-4 pb-4">
-    <button type="submit" name="action" value="save" class="btn btn-outline-secondary">
-      <i class="bi bi-floppy"></i> Save Progress
-    </button>
-    <button type="submit" name="action" value="complete" class="btn btn-success btn-lg"
-            onclick="return confirm('Mark this inspection as complete? This cannot be undone.')">
-      <i class="bi bi-check-circle-fill"></i> Complete Inspection
-    </button>
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-layout-text-sidebar-reverse" style="font-size:2.5rem;opacity:.3;"></i>
+      <p class="mt-2 mb-0">This template has no form fields. Please add fields in the template editor.</p>
+    </div>
+    {% endif %}
   </div>
+
+  {# ── Sticky footer ── #}
+  <div class="insp-footer">
+    <div class="meta">
+      Started: <strong>{{ inspection.inspection_date.strftime('%Y-%m-%d %H:%M') }}</strong>
+      &nbsp;·&nbsp; Template: <strong>{{ inspection.template.name }}</strong>
+    </div>
+    <div class="d-flex gap-2">
+      <button type="submit" name="action" value="draft" class="btn btn-sm btn-outline-light">
+        <i class="bi bi-floppy"></i> Save Draft
+      </button>
+      <button type="submit" name="action" value="submit" class="btn btn-success"
+              onclick="collectSignatures(); return confirmSubmit();">
+        <i class="bi bi-check-circle-fill"></i> Submit Inspection
+      </button>
+    </div>
+  </div>
+
 </form>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// Auto-mark item cards as answered on interaction
-document.querySelectorAll('input[type=radio]').forEach(r => {
-  r.addEventListener('change', () => {
-    const card = r.closest('.item-card');
-    if (card) card.classList.add('answered');
+// ── Rating stars ─────────────────────────────────────────────────────────────
+function setRating(btn) {
+  const group  = btn.closest('.rating-stars');
+  const val    = parseInt(btn.dataset.val);
+  const input  = document.getElementById(btn.dataset.target);
+  group.dataset.rating = val;
+  if (input) input.value = val;
+  group.querySelectorAll('button').forEach(b => {
+    b.classList.toggle('on', parseInt(b.dataset.val) <= val);
   });
+}
+
+// ── File upload label ─────────────────────────────────────────────────────────
+function showFileName(input) {
+  const wrap  = input.closest('.upload-zone');
+  const label = wrap ? wrap.querySelector('.file-name') : null;
+  if (label && input.files.length) {
+    label.textContent = input.files[0].name;
+  }
+}
+
+// ── Signature pads ────────────────────────────────────────────────────────────
+const sigPads = {};
+document.querySelectorAll('[id^="sig_"]').forEach(canvas => {
+  const fid    = canvas.id;
+  const input  = document.getElementById(canvas.dataset.field);
+  const ctx    = canvas.getContext('2d');
+  let drawing  = false;
+
+  // size canvas to its container
+  const resize = () => {
+    const w = canvas.parentElement.clientWidth;
+    const h = canvas.parentElement.clientHeight || 80;
+    canvas.width  = w;
+    canvas.height = h;
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth   = 1.8;
+    ctx.lineCap     = 'round';
+  };
+  resize();
+  new ResizeObserver(resize).observe(canvas.parentElement);
+
+  // Restore saved signature
+  if (input && input.value && input.value.startsWith('data:')) {
+    const img = new Image();
+    img.onload = () => ctx.drawImage(img, 0, 0);
+    img.src = input.value;
+  }
+
+  canvas.addEventListener('mousedown',  e => { drawing = true; ctx.beginPath(); ctx.moveTo(...pos(e, canvas)); });
+  canvas.addEventListener('mousemove',  e => { if (!drawing) return; ctx.lineTo(...pos(e, canvas)); ctx.stroke(); });
+  canvas.addEventListener('mouseup',    () => { drawing = false; if (input) input.value = canvas.toDataURL(); });
+  canvas.addEventListener('mouseleave', () => { drawing = false; });
+
+  // Touch
+  canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing = true; ctx.beginPath(); ctx.moveTo(...pos(e.touches[0], canvas)); });
+  canvas.addEventListener('touchmove',  e => { e.preventDefault(); if (!drawing) return; ctx.lineTo(...pos(e.touches[0], canvas)); ctx.stroke(); });
+  canvas.addEventListener('touchend',   e => { drawing = false; if (input) input.value = canvas.toDataURL(); });
+
+  sigPads[fid] = { ctx, canvas, input };
 });
+
+function pos(e, canvas) {
+  const r = canvas.getBoundingClientRect();
+  return [e.clientX - r.left, e.clientY - r.top];
+}
+function clearSig(id) {
+  const p = sigPads[id];
+  if (!p) return;
+  p.ctx.clearRect(0, 0, p.canvas.width, p.canvas.height);
+  if (p.input) p.input.value = '';
+}
+function collectSignatures() {
+  // Ensure all signature canvases flush their dataURL to hidden inputs
+  Object.values(sigPads).forEach(p => {
+    if (p.input && p.canvas.width > 0) {
+      p.input.value = p.canvas.toDataURL();
+    }
+  });
+}
+
+// ── Submit confirmation ───────────────────────────────────────────────────────
+function confirmSubmit() {
+  return confirm('Submit this inspection? This action cannot be undone.');
+}
 </script>
 {% endblock %}

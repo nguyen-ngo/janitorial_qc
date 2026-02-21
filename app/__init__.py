@@ -29,6 +29,7 @@ def create_app(config_name='default'):
     # render manual forms (no WTForms object) can still inject the CSRF token.
     from flask_wtf.csrf import generate_csrf
     app.jinja_env.globals['csrf_token'] = generate_csrf
+    app.jinja_env.globals['enumerate']  = enumerate
 
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
