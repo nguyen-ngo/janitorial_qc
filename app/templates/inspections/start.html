@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Start Inspection{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-play-circle"></i> Start New Inspection</h5>
+      </div>
+      <div class="card-body">
+        <form method="post">
+          {{ form.hidden_tag() }}
+
+          <div class="mb-3">
+            {{ form.template_id.label(class="form-label fw-semibold") }}
+            {{ form.template_id(class="form-select" + (" is-invalid" if form.template_id.errors else "")) }}
+            {% for e in form.template_id.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+          </div>
+
+          <div class="mb-3">
+            {{ form.facility_id.label(class="form-label fw-semibold") }}
+            {{ form.facility_id(class="form-select", id="facilitySelect") }}
+          </div>
+
+          <div class="mb-3">
+            {{ form.area_id.label(class="form-label fw-semibold") }}
+            <select name="area_id" id="areaSelect" class="form-select">
+              <option value="0">— No specific area —</option>
+            </select>
+          </div>
+
+          <div class="mb-3">
+            {{ form.notes.label(class="form-label fw-semibold") }}
+            {{ form.notes(class="form-control", rows=3, placeholder="Optional notes for this inspection…") }}
+          </div>
+
+          <div class="d-grid">
+            <button type="submit" class="btn btn-primary btn-lg">
+              <i class="bi bi-play-fill"></i> Begin Inspection
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const AREAS_URL = "{{ url_for('inspections.areas_for_facility', facility_id=0) }}".replace('/0', '/');
+const facilitySelect = document.getElementById('facilitySelect');
+const areaSelect     = document.getElementById('areaSelect');
+
+function loadAreas(facilityId) {
+  fetch(AREAS_URL + facilityId)
+    .then(r => r.json())
+    .then(areas => {
+      areaSelect.innerHTML = '<option value="0">— No specific area —</option>';
+      areas.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a.id; opt.textContent = a.name;
+        areaSelect.appendChild(opt);
+      });
+    });
+}
+
+facilitySelect.addEventListener('change', () => loadAreas(facilitySelect.value));
+if (facilitySelect.value) loadAreas(facilitySelect.value);
+</script>
+{% endblock %}

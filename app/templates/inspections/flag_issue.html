@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Flag Issue{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-danger">
+      <div class="card-header bg-danger text-white">
+        <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Flag Issue During Inspection</h5>
+      </div>
+      <div class="card-body">
+        <div class="alert alert-light border mb-3">
+          <strong>Inspection:</strong> {{ inspection.template.name }}<br>
+          <strong>Facility:</strong> {{ inspection.facility.name }}
+        </div>
+        <form method="post" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="mb-3">
+            {{ form.area_id.label(class="form-label fw-semibold") }}
+            {{ form.area_id(class="form-select") }}
+          </div>
+          <div class="mb-3">
+            {{ form.severity.label(class="form-label fw-semibold") }}
+            {{ form.severity(class="form-select") }}
+          </div>
+          <div class="mb-3">
+            {{ form.description.label(class="form-label fw-semibold") }}
+            {{ form.description(class="form-control", rows=4, placeholder="Describe the issue in detail…") }}
+          </div>
+          <div class="mb-3">
+            {{ form.photo.label(class="form-label fw-semibold") }}
+            {{ form.photo(class="form-control") }}
+          </div>
+          <div class="mb-4">
+            {{ form.assigned_to.label(class="form-label fw-semibold") }}
+            {{ form.assigned_to(class="form-select") }}
+          </div>
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-danger"><i class="bi bi-flag"></i> Log Issue</button>
+            <a href="{{ url_for('inspections.execute', inspection_id=inspection.id) }}"
+               class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

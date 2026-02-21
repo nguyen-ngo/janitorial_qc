@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Inspection #{{ inspection.id }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2>Inspection Report</h2>
+    <p class="text-muted mb-0">{{ inspection.template.name }} · {{ inspection.inspection_date.strftime('%B %d, %Y %H:%M') }}</p>
+  </div>
+  <div class="d-flex gap-2">
+    {% if current_user.role in ['admin','supervisor'] %}
+    <form method="post" action="{{ url_for('inspections.delete', inspection_id=inspection.id) }}"
+          onsubmit="return confirm('Delete this inspection?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash3"></i> Delete</button>
+    </form>
+    {% endif %}
+    <a href="{{ url_for('inspections.index') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back
+    </a>
+  </div>
+</div>
+
+{# Summary cards #}
+<div class="row mb-4">
+  <div class="col-md-3">
+    <div class="card text-center shadow-sm h-100">
+      <div class="card-body">
+        <p class="text-muted small mb-1">Overall Score</p>
+        {% if inspection.overall_score %}
+        <h2 class="fw-bold text-{{ 'success' if inspection.overall_score >= 90 else 'warning' if inspection.overall_score >= 70 else 'danger' }}">
+          {{ inspection.overall_score }}%
+        </h2>
+        {% else %}<h2 class="text-muted">—</h2>{% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center shadow-sm h-100">
+      <div class="card-body">
+        <p class="text-muted small mb-1">Status</p>
+        <span class="badge fs-6 bg-{{ 'success' if inspection.status == 'completed' else 'danger' if inspection.status == 'flagged' else 'secondary' }}">
+          {{ inspection.status|replace('_',' ')|title }}
+        </span>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center shadow-sm h-100">
+      <div class="card-body">
+        <p class="text-muted small mb-1">Facility / Area</p>
+        <p class="fw-semibold mb-0">{{ inspection.facility.name }}</p>
+        <small class="text-muted">{{ inspection.area.name if inspection.area else '—' }}</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-center shadow-sm h-100">
+      <div class="card-body">
+        <p class="text-muted small mb-1">Inspector</p>
+        <p class="fw-semibold mb-0">{{ inspection.inspector.username }}</p>
+        {% if inspection.completed_at %}
+        <small class="text-muted">Completed {{ inspection.completed_at.strftime('%Y-%m-%d %H:%M') }}</small>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if inspection.notes %}
+<div class="alert alert-light border mb-4"><strong>Notes:</strong> {{ inspection.notes }}</div>
+{% endif %}
+
+{# Checklist results by category #}
+{% for category, results in categories.items() %}
+<div class="card shadow-sm mb-3">
+  <div class="card-header bg-light">
+    <h6 class="mb-0"><i class="bi bi-folder2"></i> {{ category }}</h6>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr><th>Item</th><th>Type</th><th>Result</th><th>Comments</th><th>Photo</th></tr>
+      </thead>
+      <tbody>
+        {% for r in results %}
+        <tr>
+          <td>{{ r.checklist_item.item_description }}</td>
+          <td><span class="badge bg-secondary" style="font-size:.65rem;">{{ r.checklist_item.scoring_type|replace('_',' ') }}</span></td>
+          <td>
+            {% if r.checklist_item.scoring_type == 'pass_fail' %}
+              {% if r.passed is none %}<span class="text-muted">—</span>
+              {% elif r.passed %}<span class="badge bg-success">Pass</span>
+              {% else %}<span class="badge bg-danger">Fail</span>{% endif %}
+            {% else %}
+              {% if r.score is not none %}<strong>{{ r.score }}</strong>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            {% endif %}
+          </td>
+          <td><small class="text-muted">{{ r.comments or '—' }}</small></td>
+          <td>
+            {% if r.photo_path %}
+            <a href="{{ url_for('static', filename=r.photo_path) }}" target="_blank">
+              <img src="{{ url_for('static', filename=r.photo_path) }}" style="max-height:40px;" class="img-thumbnail">
+            </a>
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endfor %}
+
+{# Issues #}
+{% if issues %}
+<div class="card shadow-sm mt-4">
+  <div class="card-header bg-danger text-white">
+    <h6 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Issues Logged ({{ issues|length }})</h6>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr><th>Severity</th><th>Area</th><th>Description</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for issue in issues %}
+        <tr>
+          <td><span class="badge bg-{{ 'danger' if issue.severity in ['critical','high'] else 'warning text-dark' if issue.severity == 'medium' else 'secondary' }}">{{ issue.severity|title }}</span></td>
+          <td>{{ issue.area.name }}</td>
+          <td>{{ issue.description[:80] }}{% if issue.description|length > 80 %}…{% endif %}</td>
+          <td><span class="badge bg-{{ 'success' if issue.status == 'resolved' else 'warning text-dark' if issue.status == 'in_progress' else 'secondary' }}">{{ issue.status|replace('_',' ')|title }}</span></td>
+          <td><a href="{{ url_for('issues.view', issue_id=issue.id) }}" class="btn btn-sm btn-outline-secondary">View</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

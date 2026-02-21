@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Inspections{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2><i class="bi bi-clipboard-data"></i> Inspections</h2>
+  <a href="{{ url_for('inspections.start') }}" class="btn btn-primary">
+    <i class="bi bi-plus-circle"></i> Start Inspection
+  </a>
+</div>
+
+{# Filters #}
+<div class="card shadow-sm mb-4">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label small mb-1">Status</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">All Statuses</option>
+          {% for s in ['in_progress','completed','flagged'] %}
+          <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ s|replace('_',' ')|title }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small mb-1">Facility</label>
+        <select name="facility_id" class="form-select form-select-sm">
+          <option value="">All Facilities</option>
+          {% for f in facilities %}
+          <option value="{{ f.id }}" {% if facility_filter == f.id|string %}selected{% endif %}>{{ f.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-outline-primary">Filter</button>
+        <a href="{{ url_for('inspections.index') }}" class="btn btn-sm btn-outline-secondary">Clear</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    {% if inspections.items %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Date</th><th>Facility</th><th>Area</th>
+            <th>Template</th><th>Inspector</th><th>Score</th>
+            <th>Status</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ins in inspections.items %}
+          <tr>
+            <td>{{ ins.inspection_date.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>{{ ins.facility.name }}</td>
+            <td>{% if ins.area %}{{ ins.area.name }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td>{{ ins.template.name }}</td>
+            <td>{{ ins.inspector.username }}</td>
+            <td>
+              {% if ins.overall_score %}
+              <span class="badge bg-{{ 'success' if ins.overall_score >= 90 else 'warning' if ins.overall_score >= 70 else 'danger' }}">
+                {{ ins.overall_score }}%
+              </span>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td>
+              <span class="badge bg-{{ 'success' if ins.status == 'completed' else 'danger' if ins.status == 'flagged' else 'secondary' }}">
+                {{ ins.status|replace('_',' ')|title }}
+              </span>
+            </td>
+            <td>
+              {% if ins.status == 'in_progress' or ins.status == 'flagged' %}
+              <a href="{{ url_for('inspections.execute', inspection_id=ins.id) }}" class="btn btn-sm btn-outline-primary">Continue</a>
+              {% else %}
+              <a href="{{ url_for('inspections.view', inspection_id=ins.id) }}" class="btn btn-sm btn-outline-secondary">View</a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {# Pagination #}
+    {% if inspections.pages > 1 %}
+    <div class="d-flex justify-content-center py-3">
+      <nav><ul class="pagination pagination-sm mb-0">
+        {% for p in inspections.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+          {% if p %}
+          <li class="page-item {{ 'active' if p == inspections.page }}">
+            <a class="page-link" href="{{ url_for('inspections.index', page=p, status=status_filter, facility_id=facility_filter) }}">{{ p }}</a>
+          </li>
+          {% else %}
+          <li class="page-item disabled"><span class="page-link">…</span></li>
+          {% endif %}
+        {% endfor %}
+      </ul></nav>
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="alert alert-info m-3"><i class="bi bi-info-circle"></i> No inspections found.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

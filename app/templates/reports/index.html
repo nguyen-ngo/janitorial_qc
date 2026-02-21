@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block title %}Reports & Analytics{% endblock %}
+{% block extra_css %}
+<style>
+  .stat-card { border-left: 4px solid; }
+  .stat-card.primary { border-color: #0d6efd; }
+  .stat-card.success { border-color: #198754; }
+  .stat-card.danger  { border-color: #dc3545; }
+  .stat-card.info    { border-color: #0dcaf0; }
+  .chart-container   { position:relative; height:280px; }
+</style>
+{% endblock %}
+{% block content %}
+
+{# ── Header + date filter ── #}
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <div>
+    <h2><i class="bi bi-graph-up"></i> Reports & Analytics</h2>
+    <p class="text-muted mb-0">{{ start.strftime('%b %d, %Y') }} — {{ end.strftime('%b %d, %Y') }}</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('reports.export_inspections', start=start.strftime('%Y-%m-%d'), end=end.strftime('%Y-%m-%d')) }}"
+       class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i> Export Inspections CSV</a>
+    <a href="{{ url_for('reports.export_issues', start=start.strftime('%Y-%m-%d'), end=end.strftime('%Y-%m-%d')) }}"
+       class="btn btn-sm btn-outline-danger"><i class="bi bi-download"></i> Export Issues CSV</a>
+  </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label small mb-1">From</label>
+        <input type="date" name="start" class="form-control form-control-sm"
+               value="{{ start.strftime('%Y-%m-%d') }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small mb-1">To</label>
+        <input type="date" name="end" class="form-control form-control-sm"
+               value="{{ end.strftime('%Y-%m-%d') }}">
+      </div>
+      <div class="col-auto">
+        <button class="btn btn-sm btn-primary">Apply</button>
+        <a href="{{ url_for('reports.index') }}" class="btn btn-sm btn-outline-secondary">Reset</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── KPI cards ── #}
+<div class="row mb-4">
+  {% for label, value, color, icon in [
+    ('Total Inspections', total_inspections, 'primary', 'bi-clipboard-data'),
+    ('Completed',         completed,         'success', 'bi-check-circle'),
+    ('Flagged',           flagged,           'danger',  'bi-flag'),
+    ('Avg Score',         (avg_score|string + '%') if avg_score else '—', 'info', 'bi-graph-up'),
+  ] %}
+  <div class="col-md-3 mb-3">
+    <div class="card shadow-sm stat-card {{ color }} h-100">
+      <div class="card-body d-flex align-items-center gap-3">
+        <i class="bi {{ icon }} text-{{ color }}" style="font-size:2rem;"></i>
+        <div>
+          <p class="text-muted small mb-0">{{ label }}</p>
+          <h3 class="mb-0 fw-bold">{{ value }}</h3>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{# ── Charts row 1 ── #}
+<div class="row mb-4">
+  <div class="col-lg-8 mb-3">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-light"><h6 class="mb-0"><i class="bi bi-graph-up-arrow"></i> Score Trend</h6></div>
+      <div class="card-body"><div class="chart-container"><canvas id="trendChart"></canvas></div></div>
+    </div>
+  </div>
+  <div class="col-lg-4 mb-3">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-light"><h6 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Issues by Severity</h6></div>
+      <div class="card-body"><div class="chart-container"><canvas id="severityChart"></canvas></div></div>
+    </div>
+  </div>
+</div>
+
+{# ── Charts row 2 ── #}
+<div class="row mb-4">
+  <div class="col-lg-8 mb-3">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-light"><h6 class="mb-0"><i class="bi bi-building"></i> Avg Score by Facility</h6></div>
+      <div class="card-body"><div class="chart-container"><canvas id="facilityChart"></canvas></div></div>
+    </div>
+  </div>
+  <div class="col-lg-4 mb-3">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-light"><h6 class="mb-0"><i class="bi bi-pie-chart"></i> Issue Status</h6></div>
+      <div class="card-body"><div class="chart-container"><canvas id="statusChart"></canvas></div></div>
+    </div>
+  </div>
+</div>
+
+{# ── Top inspectors table ── #}
+{% if top_inspectors %}
+<div class="row mb-4">
+  <div class="col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-header bg-light"><h6 class="mb-0"><i class="bi bi-person-check"></i> Top Inspectors</h6></div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-light"><tr><th>Inspector</th><th>Inspections</th><th>Avg Score</th></tr></thead>
+          <tbody>
+            {% for row in top_inspectors %}
+            <tr>
+              <td>{{ row.username }}</td>
+              <td>{{ row.count }}</td>
+              <td>
+                {% if row.avg_score %}
+                <span class="badge bg-{{ 'success' if row.avg_score >= 90 else 'warning text-dark' if row.avg_score >= 70 else 'danger' }}">
+                  {{ '%.1f'|format(row.avg_score|float) }}%
+                </span>
+                {% else %}—{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# ── Critical / High open issues ── #}
+  <div class="col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-header bg-danger text-white"><h6 class="mb-0"><i class="bi bi-fire"></i> Open Critical / High Issues</h6></div>
+      {% if critical_issues %}
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead class="table-light"><tr><th>Severity</th><th>Area</th><th>Description</th><th></th></tr></thead>
+          <tbody>
+            {% for issue in critical_issues %}
+            <tr>
+              <td><span class="badge bg-danger">{{ issue.severity|title }}</span></td>
+              <td>{{ issue.area.name }}</td>
+              <td>{{ issue.description[:50] }}{% if issue.description|length > 50 %}…{% endif %}</td>
+              <td><a href="{{ url_for('issues.view', issue_id=issue.id) }}" class="btn btn-sm btn-outline-secondary">View</a></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body"><p class="text-muted mb-0">No open critical or high issues. 🎉</p></div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+Chart.defaults.color = '#6c757d';
+
+const BLUE   = '#0d6efd', GREEN  = '#198754', RED  = '#dc3545',
+      AMBER  = '#ffc107', TEAL   = '#0dcaf0', GRAY = '#adb5bd';
+
+// ── Trend chart ──────────────────────────────────────────────────────────────
+const trendData = {{ daily_scores | map(attribute=0) | list | tojson }};  {# dates #}
+new Chart(document.getElementById('trendChart'), {
+  type: 'line',
+  data: {
+    labels: {{ daily_scores | map(attribute='day') | map('string') | list | tojson }},
+    datasets: [{
+      label: 'Avg Score (%)',
+      data:  {{ daily_scores | map(attribute='avg') | list | tojson }},
+      borderColor: BLUE, backgroundColor: 'rgba(13,110,253,.1)',
+      tension: .3, fill: true, pointRadius: 4,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    scales: { y: { min: 0, max: 100, ticks: { callback: v => v + '%' } } },
+    plugins: { legend: { display: false } }
+  }
+});
+
+// ── Facility bar chart ────────────────────────────────────────────────────────
+new Chart(document.getElementById('facilityChart'), {
+  type: 'bar',
+  data: {
+    labels: {{ facility_scores | map(attribute='name') | list | tojson }},
+    datasets: [{
+      label: 'Avg Score (%)',
+      data:  {{ facility_scores | map(attribute='avg_score') | list | tojson }},
+      backgroundColor: {{ facility_scores | map(attribute='avg_score') | list | tojson }}
+        .map(s => s >= 90 ? GREEN : s >= 70 ? AMBER : RED),
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    scales: { y: { min: 0, max: 100, ticks: { callback: v => v + '%' } } },
+    plugins: { legend: { display: false } }
+  }
+});
+
+// ── Severity doughnut ─────────────────────────────────────────────────────────
+const sevData = {{ issue_severity | tojson }};
+new Chart(document.getElementById('severityChart'), {
+  type: 'doughnut',
+  data: {
+    labels: sevData.map(r => r.severity ? r.severity.charAt(0).toUpperCase() + r.severity.slice(1) : 'Unknown'),
+    datasets: [{
+      data: sevData.map(r => r.count),
+      backgroundColor: sevData.map(r => ({critical:RED,high:'#fd7e14',medium:AMBER,low:GRAY}[r.severity] || GRAY)),
+    }]
+  },
+  options: { responsive: true, maintainAspectRatio: false,
+             plugins: { legend: { position: 'bottom' } } }
+});
+
+// ── Status pie ────────────────────────────────────────────────────────────────
+const stData = {{ issue_status | tojson }};
+new Chart(document.getElementById('statusChart'), {
+  type: 'pie',
+  data: {
+    labels: stData.map(r => r.status ? r.status.replace('_',' ').replace(/\b\w/g,c=>c.toUpperCase()) : 'Unknown'),
+    datasets: [{
+      data: stData.map(r => r.count),
+      backgroundColor: stData.map(r => ({open:RED, in_progress:AMBER, resolved:GREEN}[r.status] || GRAY)),
+    }]
+  },
+  options: { responsive: true, maintainAspectRatio: false,
+             plugins: { legend: { position: 'bottom' } } }
+});
+</script>
+{% endblock %}

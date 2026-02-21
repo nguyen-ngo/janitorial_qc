@@ -66,7 +66,10 @@ def index():
         avg_score_query = avg_score_query.filter(Inspection.inspector_id == current_user.id)
     
     avg_score = db.session.query(func.avg(Inspection.overall_score)).filter(
-        Inspection.id.in_([i.id for i in avg_score_query.all()])
+    Inspection.status == 'completed',
+    Inspection.overall_score.isnot(None),
+    Inspection.inspection_date >= thirty_days_ago,
+    *([Inspection.inspector_id == current_user.id] if current_user.role == 'inspector' else [])
     ).scalar()
     
     # Recent inspections

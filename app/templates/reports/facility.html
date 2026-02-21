@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}{{ facility.name }} — Facility Report{% endblock %}
+{% block extra_css %}
+<style>.chart-container { position:relative; height:240px; }</style>
+{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <div>
+    <h2><i class="bi bi-building"></i> {{ facility.name }}</h2>
+    <p class="text-muted mb-0">{{ start.strftime('%b %d, %Y') }} — {{ end.strftime('%b %d, %Y') }}</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('reports.export_inspections', start=start.strftime('%Y-%m-%d'), end=end.strftime('%Y-%m-%d')) }}"
+       class="btn btn-sm btn-outline-success"><i class="bi bi-download"></i> Export CSV</a>
+    <a href="{{ url_for('reports.index') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Back to Reports
+    </a>
+  </div>
+</div>
+
+{# KPI row #}
+{% set completed = inspections | selectattr('status','eq','completed') | list %}
+{% set avg = (completed | map(attribute='overall_score') | select | list) %}
+<div class="row mb-4">
+  <div class="col-md-3 mb-3">
+    <div class="card shadow-sm text-center h-100">
+      <div class="card-body">
+        <p class="text-muted small mb-1">Total Inspections</p>
+        <h3 class="fw-bold">{{ inspections|length }}</h3>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3 mb-3">
+    <div class="card shadow-sm text-center h-100">
+      <div class="card-body">
+        <p class="text-muted small mb-1">Completed</p>
+        <h3 class="fw-bold text-success">{{ completed|length }}</h3>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3 mb-3">
+    <div class="card shadow-sm text-center h-100">
+      <div class="card-body">
+        <p class="text-muted small mb-1">Open Issues</p>
+        <h3 class="fw-bold text-danger">{{ open_issues|length }}</h3>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3 mb-3">
+    <div class="card shadow-sm text-center h-100">
+      <div class="card-body">
+        <p class="text-muted small mb-1">Avg Score</p>
+        {% if avg %}
+          {% set avg_val = (avg | map('float') | sum) / avg|length %}
+          <h3 class="fw-bold text-{{ 'success' if avg_val >= 90 else 'warning' if avg_val >= 70 else 'danger' }}">
+            {{ '%.1f'|format(avg_val) }}%
+          </h3>
+        {% else %}<h3 class="text-muted">—</h3>{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Area scores chart #}
+{% if area_scores %}
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-light"><h6 class="mb-0">Avg Score by Area</h6></div>
+  <div class="card-body"><div class="chart-container"><canvas id="areaChart"></canvas></div></div>
+</div>
+{% endif %}
+
+{# Inspection history #}
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-light"><h6 class="mb-0">Inspection History</h6></div>
+  <div class="table-responsive">
+    {% if inspections %}
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr><th>Date</th><th>Area</th><th>Template</th><th>Inspector</th><th>Score</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for ins in inspections %}
+        <tr>
+          <td><small>{{ ins.inspection_date.strftime('%Y-%m-%d %H:%M') }}</small></td>
+          <td>{{ ins.area.name if ins.area else '—' }}</td>
+          <td>{{ ins.template.name }}</td>
+          <td>{{ ins.inspector.username }}</td>
+          <td>
+            {% if ins.overall_score %}
+            <span class="badge bg-{{ 'success' if ins.overall_score >= 90 else 'warning text-dark' if ins.overall_score >= 70 else 'danger' }}">
+              {{ ins.overall_score }}%
+            </span>
+            {% else %}—{% endif %}
+          </td>
+          <td><span class="badge bg-{{ 'success' if ins.status == 'completed' else 'danger' if ins.status == 'flagged' else 'secondary' }}">
+            {{ ins.status|replace('_',' ')|title }}</span></td>
+          <td><a href="{{ url_for('inspections.view', inspection_id=ins.id) }}" class="btn btn-sm btn-outline-secondary">View</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="card-body"><p class="text-muted mb-0">No inspections in this date range.</p></div>
+    {% endif %}
+  </div>
+</div>
+
+{# Open issues #}
+{% if open_issues %}
+<div class="card shadow-sm">
+  <div class="card-header bg-danger text-white"><h6 class="mb-0">Open Issues</h6></div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light"><tr><th>Severity</th><th>Area</th><th>Description</th><th>Reported</th><th></th></tr></thead>
+      <tbody>
+        {% for issue in open_issues %}
+        <tr>
+          <td><span class="badge bg-{{ 'danger' if issue.severity in ['critical','high'] else 'warning text-dark' if issue.severity == 'medium' else 'secondary' }}">{{ issue.severity|title }}</span></td>
+          <td>{{ issue.area.name }}</td>
+          <td>{{ issue.description[:60] }}{% if issue.description|length > 60 %}…{% endif %}</td>
+          <td><small>{{ issue.reported_at.strftime('%Y-%m-%d') }}</small></td>
+          <td><a href="{{ url_for('issues.view', issue_id=issue.id) }}" class="btn btn-sm btn-outline-secondary">View</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if area_scores %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+new Chart(document.getElementById('areaChart'), {
+  type: 'bar',
+  data: {
+    labels: {{ area_scores | map(attribute='name') | list | tojson }},
+    datasets: [{
+      label: 'Avg Score (%)',
+      data: {{ area_scores | map(attribute='avg_score') | list | tojson }},
+      backgroundColor: {{ area_scores | map(attribute='avg_score') | list | tojson }}
+        .map(s => s >= 90 ? '#198754' : s >= 70 ? '#ffc107' : '#dc3545'),
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    scales: { y: { min: 0, max: 100, ticks: { callback: v => v + '%' } } },
+    plugins: { legend: { display: false } }
+  }
+});
+</script>
+{% endif %}
+{% endblock %}
