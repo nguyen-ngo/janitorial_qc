@@ -389,7 +389,7 @@
      This avoids using |safe which bypasses Jinja2 auto-escaping and could allow
      stored XSS if the sanitiser ever lets a malicious value through. #}
   <div id="schema-data"
-       data-schema="{{ form_schema_json | tojson }}"
+       data-schema="{{ form_schema | tojson }}"
        style="display:none;"></div>
 
   <!-- PROPERTIES -->

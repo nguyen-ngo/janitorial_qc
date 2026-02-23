@@ -177,7 +177,7 @@ def form_editor(template_id):
     return render_template(
         'templates/form_editor.html',
         template=template,
-        form_schema_json=json.dumps(form_schema)
+        form_schema=form_schema          # pass the list — tojson handles encoding in the template
     )
 
 
