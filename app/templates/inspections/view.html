@@ -26,43 +26,55 @@
   .meta-item .lbl { font-size:.72rem; color:#94a3b8; font-weight:500; text-transform:uppercase; letter-spacing:.04em; }
   .meta-item .val { font-size:.9rem; color:#0f172a; font-weight:500; margin-top:.1rem; }
 
-  /* Grid — 52px rows matches the form editor exactly */
+  /* ── Grid: 12 cols × 36px rows, tight 3px gap ── */
   .form-grid {
-    display:grid; grid-template-columns:repeat(12,72px);
-    grid-auto-rows:52px; gap:4px 8px; width:max-content;
+    display:grid;
+    grid-template-columns: repeat(12, 72px);
+    grid-auto-rows: 36px;
+    gap: 3px 8px;
+    width: max-content;
   }
-  .fg-cell { overflow:hidden; display:flex; flex-direction:column; padding:.18rem .45rem; }
-  .fg-cell .field-lbl { font-size:.7rem; font-weight:500; color:#64748b; margin-bottom:.1rem; display:block; flex-shrink:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .fg-cell {
+    overflow:hidden; display:flex; flex-direction:column;
+    padding:.1rem .4rem;
+  }
+  .fg-cell .field-lbl {
+    font-size:.68rem; font-weight:600; color:#94a3b8;
+    display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    flex-shrink:0; line-height:1.3;
+  }
   .fg-cell .field-val {
     font-size:.78rem; color:#0f172a; background:#f8fafc;
     border:1px solid #e2e8f0; border-radius:4px;
-    padding:.18rem .35rem; flex:1; min-height:0;
+    padding:.1rem .35rem; flex:1; min-height:0;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    display:flex; align-items:center;
   }
   .fg-cell .field-val.empty { color:#94a3b8; font-style:italic; }
-  .section-divider { height:100%; display:flex; align-items:center; border-top:2px solid #e2e8f0; }
-  .section-divider strong { font-weight:700; color:#374151; font-size:.9rem; }
 
-  /* Rating — single line */
-  .rating-line { display:flex; align-items:center; gap:.3rem; flex:1; min-height:0; }
-  .rating-stars-ro { color:#f59e0b; font-size:.95rem; letter-spacing:.03rem; line-height:1; white-space:nowrap; }
-  .rating-score    { font-size:.72rem; color:#64748b; white-space:nowrap; }
+  /* Section heading — spans full width, single row */
+  .section-head {
+    display:flex; align-items:flex-end; padding-bottom:.15rem;
+    border-bottom:2px solid #e2e8f0; height:100%;
+  }
+  .section-head strong { font-weight:700; color:#374151; font-size:.88rem; }
+
+  /* Rating — inline stars */
+  .rating-line { display:flex; align-items:center; gap:.28rem; flex:1; min-height:0; }
+  .rating-stars-ro { color:#f59e0b; font-size:.9rem; letter-spacing:.02rem; line-height:1; white-space:nowrap; }
+  .rating-score    { font-size:.7rem; color:#64748b; white-space:nowrap; }
 
   /* View Photo / Signature button */
   .btn-view-media {
-    display:inline-flex; align-items:center; gap:.25rem;
-    font-size:.7rem; padding:.15rem .48rem; border-radius:4px;
+    display:inline-flex; align-items:center; gap:.2rem;
+    font-size:.68rem; padding:.1rem .42rem; border-radius:4px;
     border:1px solid #cbd5e1; background:#f8fafc; color:#374151;
-    cursor:pointer; white-space:nowrap; flex-shrink:0;
+    cursor:pointer; white-space:nowrap;
     transition:border-color .12s, background .12s;
   }
   .btn-view-media:hover { border-color:#2563eb; background:#eff6ff; color:#2563eb; }
 
-  .tbl-view { width:100%; border-collapse:collapse; font-size:.76rem; }
-  .tbl-view th { background:#f1f5f9; font-weight:600; color:#374151; padding:.2rem .4rem; border:1px solid #e2e8f0; font-size:.73rem; }
-  .tbl-view td { border:1px solid #e2e8f0; padding:.15rem .4rem; color:#0f172a; }
-
-  /* Photo / signature lightbox */
+  /* Media lightbox */
   .media-backdrop {
     display:none; position:fixed; inset:0; z-index:1055;
     background:rgba(0,0,0,.65); align-items:center; justify-content:center;
@@ -82,6 +94,11 @@
   .media-modal-close { border:none; background:none; font-size:1.1rem; color:#64748b; cursor:pointer; line-height:1; padding:0; }
   .media-modal-close:hover { color:#dc2626; }
   .media-modal img { display:block; max-width:100%; max-height:calc(90vh - 46px); object-fit:contain; }
+
+  /* Issues */
+  .tbl-view { width:100%; border-collapse:collapse; font-size:.76rem; }
+  .tbl-view th { background:#f1f5f9; font-weight:600; color:#374151; padding:.2rem .4rem; border:1px solid #e2e8f0; }
+  .tbl-view td { border:1px solid #e2e8f0; padding:.15rem .4rem; color:#0f172a; }
 </style>
 {% endblock %}
 
@@ -152,112 +169,211 @@
       </div>
     </div>
 
-    {# Form field responses #}
+    {# ── Build the filtered field set ──────────────────────────────────────
+       Strategy:
+       1. Find all grid rows that contain at least one rated rating field.
+       2. Collect every field whose grid row overlaps a rated row.
+       3. Also collect section fields that immediately precede a rated group.
+       4. Re-number rows sequentially (1-based) so there are no gaps.
+    #}
     {% if form_fields %}
-    <div class="form-grid">
+
+      {# Step 1: collect grid row numbers that have a rated rating field #}
+      {% set ns = namespace(rated_rows=[], section_rows=[], pending_section=none) %}
+
       {% for field in form_fields %}
-      {% set fid = field.id %}
-      {% set val = form_data.get(fid) %}
-
-      <div class="fg-cell"
-           style="grid-column: {{ field.col }} / span {{ field.colSpan }};
-                  grid-row:    {{ field.row }} / span {{ field.rowSpan }};">
-
         {% if field.type == 'section' %}
-          <div class="section-divider"><strong>{{ field.label }}</strong></div>
-
-        {% elif field.type == 'label' %}
-          {% set fs_map = {'small':'0.76rem','normal':'0.86rem','large':'1rem','x-large':'1.15rem'} %}
-          <div style="font-size:{{ fs_map.get(field.font_size or 'normal','0.86rem') }};
-                      font-weight:{{ field.font_weight or 'normal' }};color:#374151;
-                      line-height:1.4;overflow:hidden;height:100%;">{{ field.text_content or '' }}</div>
-
-        {% elif field.type in ('button_submit','button_print','button_email') %}
-          {# hidden in read-only view #}
-
+          {% set ns.pending_section = field %}
         {% elif field.type == 'rating' %}
-          <span class="field-lbl">{{ field.label }}</span>
-          <div class="rating-line">
-            {% if val and val|int > 0 %}
-              <span class="rating-stars-ro">{% for i in range(1,6) %}{{ '★' if i <= (val|int) else '☆' }}{% endfor %}</span>
-              <span class="rating-score">{{ val }}/5</span>
-            {% else %}
-              <span style="font-size:.75rem;color:#94a3b8;font-style:italic;">Not rated</span>
+          {% set score = form_data.get(field.id | string, '0') | int %}
+          {% if score > 0 %}
+            {# Mark every grid row this rating cell spans #}
+            {% for r in range(field.row, field.row + field.rowSpan) %}
+              {% if r not in ns.rated_rows %}
+                {% set ns.rated_rows = ns.rated_rows + [r] %}
+              {% endif %}
+            {% endfor %}
+            {# Attach pending section to these rows #}
+            {% if ns.pending_section is not none %}
+              {% set ns.section_rows = ns.section_rows + [(ns.pending_section, field.row)] %}
+              {% set ns.pending_section = none %}
             {% endif %}
-          </div>
-
-        {% elif field.type == 'image' %}
-          <span class="field-lbl">{{ field.label }}</span>
-          <div style="display:flex;align-items:center;flex:1;min-height:0;">
-            {% if val %}
-            <button type="button" class="btn-view-media"
-                    onclick="openMedia('{{ url_for('static', filename=val) }}', '{{ field.label | e }}')">
-              <i class="bi bi-image"></i> View Photo
-            </button>
-            {% else %}
-            <span style="font-size:.75rem;color:#94a3b8;font-style:italic;">No photo</span>
-            {% endif %}
-          </div>
-
-        {% elif field.type == 'signature' %}
-          <span class="field-lbl">{{ field.label }}</span>
-          <div style="display:flex;align-items:center;flex:1;min-height:0;">
-            {% if val and val.startswith('data:') %}
-            <button type="button" class="btn-view-media"
-                    onclick="openMedia('{{ val }}', '{{ field.label | e }}')">
-              <i class="bi bi-pen"></i> View Signature
-            </button>
-            {% else %}
-            <span style="font-size:.75rem;color:#94a3b8;font-style:italic;">No signature</span>
-            {% endif %}
-          </div>
-
-        {% elif field.type == 'checkbox' %}
-          <span class="field-lbl">{{ field.label }}</span>
-          <div class="field-val">
-            {% if val == 'yes' %}
-            <span class="text-success"><i class="bi bi-check-circle-fill"></i> Yes</span>
-            {% else %}
-            <span class="text-muted"><i class="bi bi-circle"></i> No</span>
-            {% endif %}
-          </div>
-
-        {% elif field.type == 'checkbox_group' %}
-          <span class="field-lbl">{{ field.label }}</span>
-          <div class="field-val" style="overflow:auto;white-space:normal;">
-            {% if val and val is iterable and val is not string %}
-              {% for item in val %}<span class="badge bg-primary me-1" style="font-size:.65rem;">{{ item }}</span>{% endfor %}
-            {% else %}
-            <span class="empty">None selected</span>
-            {% endif %}
-          </div>
-
-        {% elif field.type == 'table' %}
-          <span class="field-lbl">{{ field.label }}</span>
-          {% if val and val is iterable and val is not string %}
-          <div style="overflow:auto;flex:1;min-height:0;">
-            <table class="tbl-view">
-              <thead><tr>{% for hdr in (field.col_headers or ['Column 1']) %}<th>{{ hdr }}</th>{% endfor %}</tr></thead>
-              <tbody>
-                {% for row in val %}
-                <tr>{% for hdr in (field.col_headers or ['Column 1']) %}<td>{{ row.get(hdr,'') }}</td>{% endfor %}</tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
           {% else %}
-          <div class="field-val empty">No data</div>
+            {% set ns.pending_section = ns.pending_section %}
           {% endif %}
-
         {% else %}
-          {# text, textarea, number, date, email, radio, select #}
-          <span class="field-lbl">{{ field.label }}</span>
-          <div class="field-val {{ 'empty' if not val }}">{{ val or '—' }}</div>
+          {% set ns.pending_section = ns.pending_section %}
         {% endif %}
-
-      </div>
       {% endfor %}
-    </div>
+
+      {# Step 2: collect fields whose rows overlap rated_rows, plus section fields #}
+      {# Build list of (original_row, field) tuples to sort and re-number #}
+      {% set ns2 = namespace(visible=[], section_emitted=[]) %}
+
+      {# First pass: emit section fields just before the first rated row they precede #}
+      {% for sec_field, first_rated_row in ns.section_rows %}
+        {% if first_rated_row not in ns2.section_emitted %}
+          {% set ns2.visible = ns2.visible + [(first_rated_row - 0.5, sec_field)] %}
+          {% set ns2.section_emitted = ns2.section_emitted + [first_rated_row] %}
+        {% endif %}
+      {% endfor %}
+
+      {# Second pass: all fields whose row range overlaps rated_rows #}
+      {% for field in form_fields %}
+        {% if field.type not in ('section', 'label', 'button_submit', 'button_print', 'button_email') %}
+          {% set overlaps = namespace(found=false) %}
+          {% for r in range(field.row, field.row + field.rowSpan) %}
+            {% if r in ns.rated_rows %}
+              {% set overlaps.found = true %}
+            {% endif %}
+          {% endfor %}
+          {% if overlaps.found %}
+            {% set ns2.visible = ns2.visible + [(field.row, field)] %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+
+      {# Step 3: sort visible list by sort_key (first element of tuple) #}
+      {# Jinja2 can't sort tuples directly, so use dictsort workaround via a temp dict #}
+      {# Instead, render in original form_fields order (already sorted by row,col) #}
+
+      {# Simpler approach: single pass in original order, re-number rows on the fly #}
+      {# Map original_row -> new_row using the sorted rated_rows list #}
+      {% set sorted_rated = ns.rated_rows | sort %}
+
+      {# Build row mapping: original row number -> compact row number #}
+      {# Sections get row = (first rated row they precede) - 1 in new numbering #}
+      {# We assign new row numbers: section=1, then its data rows=2,3,...  etc. #}
+
+      {# Final render: walk form_fields in order, emit only visible ones with remapped rows #}
+      {% set remap = namespace(out_row=1, last_orig_row=-1, pending_sec=none, pending_sec_orig_row=-1) %}
+
+      <div class="form-grid">
+
+        {% for field in form_fields %}
+          {% set ftype = field.type %}
+
+          {# Track pending section #}
+          {% if ftype == 'section' %}
+            {% set remap.pending_sec = field %}
+            {% set remap.pending_sec_orig_row = field.row %}
+
+          {% elif ftype in ('label', 'button_submit', 'button_print', 'button_email') %}
+            {# skip #}
+
+          {% else %}
+            {# Check if this field overlaps any rated row #}
+            {% set vis = namespace(show=false) %}
+            {% for r in range(field.row, field.row + field.rowSpan) %}
+              {% if r in ns.rated_rows %}{% set vis.show = true %}{% endif %}
+            {% endfor %}
+
+            {% if vis.show %}
+              {# Flush pending section first #}
+              {% if remap.pending_sec is not none %}
+                {# Section: 1 row tall, spanning all 12 cols #}
+                <div class="fg-cell" style="grid-column:1 / span 12; grid-row:{{ remap.out_row }} / span 1;">
+                  <div class="section-head"><strong>{{ remap.pending_sec.label }}</strong></div>
+                </div>
+                {% set remap.out_row = remap.out_row + 1 %}
+                {% set remap.pending_sec = none %}
+                {% set remap.last_orig_row = -1 %}
+              {% endif %}
+
+              {# Advance out_row when the original row changes #}
+              {% if field.row != remap.last_orig_row and remap.last_orig_row != -1 %}
+                {% set remap.out_row = remap.out_row + 1 %}
+              {% endif %}
+              {% set remap.last_orig_row = field.row %}
+
+              {# Render the field at its original col/colSpan but remapped row #}
+              <div class="fg-cell"
+                   style="grid-column: {{ field.col }} / span {{ field.colSpan }};
+                          grid-row: {{ remap.out_row }} / span 1;">
+
+                {% set fid = field.id | string %}
+                {% set val = form_data.get(fid, '') %}
+
+                {% if ftype == 'rating' %}
+                  <span class="field-lbl">{{ field.label }}</span>
+                  <div class="rating-line">
+                    {% set score = val | int %}
+                    {% if score > 0 %}
+                      <span class="rating-stars-ro">{% for i in range(1,6) %}{{ '★' if i <= score else '☆' }}{% endfor %}</span>
+                      <span class="rating-score">{{ score }}/5</span>
+                    {% else %}
+                      <span style="font-size:.72rem;color:#94a3b8;font-style:italic;">Not rated</span>
+                    {% endif %}
+                  </div>
+
+                {% elif ftype == 'image' %}
+                  <span class="field-lbl">{{ field.label }}</span>
+                  <div style="display:flex;align-items:center;flex:1;min-height:0;">
+                    {% if val %}
+                    <button type="button" class="btn-view-media"
+                            onclick="openMedia('{{ url_for('static', filename=val) }}','{{ field.label | e }}')">
+                      <i class="bi bi-image"></i> View Photo
+                    </button>
+                    {% else %}
+                    <span style="font-size:.72rem;color:#94a3b8;font-style:italic;">No photo</span>
+                    {% endif %}
+                  </div>
+
+                {% elif ftype == 'signature' %}
+                  <span class="field-lbl">{{ field.label }}</span>
+                  <div style="display:flex;align-items:center;flex:1;min-height:0;">
+                    {% if val and val.startswith('data:') %}
+                    <button type="button" class="btn-view-media"
+                            onclick="openMedia('{{ val }}','{{ field.label | e }}')">
+                      <i class="bi bi-pen"></i> View Signature
+                    </button>
+                    {% else %}
+                    <span style="font-size:.72rem;color:#94a3b8;font-style:italic;">No signature</span>
+                    {% endif %}
+                  </div>
+
+                {% elif ftype == 'checkbox' %}
+                  <span class="field-lbl">{{ field.label }}</span>
+                  <div class="field-val">
+                    {% if val == 'yes' %}<span class="text-success"><i class="bi bi-check-circle-fill"></i> Yes</span>
+                    {% else %}<span class="text-muted"><i class="bi bi-circle"></i> No</span>{% endif %}
+                  </div>
+
+                {% elif ftype == 'checkbox_group' %}
+                  <span class="field-lbl">{{ field.label }}</span>
+                  <div class="field-val" style="white-space:normal;overflow:auto;">
+                    {% if val and val is iterable and val is not string %}
+                      {% for item in val %}<span class="badge bg-primary me-1" style="font-size:.62rem;">{{ item }}</span>{% endfor %}
+                    {% else %}<span class="empty">None</span>{% endif %}
+                  </div>
+
+                {% elif ftype == 'table' %}
+                  <span class="field-lbl">{{ field.label }}</span>
+                  <div style="overflow:auto;flex:1;min-height:0;">
+                    {% if val and val is iterable and val is not string %}
+                    <table class="tbl-view">
+                      <thead><tr>{% for hdr in (field.col_headers or ['Col']) %}<th>{{ hdr }}</th>{% endfor %}</tr></thead>
+                      <tbody>{% for row in val %}<tr>{% for hdr in (field.col_headers or ['Col']) %}<td>{{ row.get(hdr,'') }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+                    </table>
+                    {% else %}<span style="font-size:.72rem;color:#94a3b8;">No data</span>{% endif %}
+                  </div>
+
+                {% else %}
+                  {# text, number, date, email, radio, select, textarea #}
+                  <span class="field-lbl">{{ field.label }}</span>
+                  <div class="field-val {{ 'empty' if not val }}">{{ val or '—' }}</div>
+                {% endif %}
+
+              </div>{# /fg-cell #}
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+
+      </div>{# /form-grid #}
+
+      {% if not ns.rated_rows %}
+      <p class="text-muted">No rated fields in this inspection.</p>
+      {% endif %}
 
     {% else %}
     <p class="text-muted">No form fields found for this template.</p>
@@ -290,12 +406,12 @@
   </div>
 </div>
 
-{# Photo / Signature lightbox #}
-<div class="media-backdrop" id="mediaModal" onclick="closeOnBackdrop(event)">
+{# Media lightbox #}
+<div class="media-backdrop" id="mediaModal" onclick="if(event.target.id==='mediaModal')closeMedia()">
   <div class="media-modal">
     <div class="media-modal-head">
       <span id="mediaLabel">Photo</span>
-      <button class="media-modal-close" onclick="closeMedia()" aria-label="Close">&times;</button>
+      <button class="media-modal-close" onclick="closeMedia()">&times;</button>
     </div>
     <img id="mediaImg" src="" alt="">
   </div>
@@ -312,9 +428,6 @@ function openMedia(src, label) {
 function closeMedia() {
   document.getElementById('mediaModal').classList.remove('open');
   document.getElementById('mediaImg').src = '';
-}
-function closeOnBackdrop(e) {
-  if (e.target.id === 'mediaModal') closeMedia();
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMedia(); });
 </script>
