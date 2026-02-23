@@ -178,75 +178,25 @@
     #}
     {% if form_fields %}
 
-      {# Step 1: collect grid row numbers that have a rated rating field #}
-      {% set ns = namespace(rated_rows=[], section_rows=[], pending_section=none) %}
-
+      {# Pass 1: collect grid row numbers that contain a rated (score>0) rating field #}
+      {% set ns = namespace(rated_rows=[]) %}
       {% for field in form_fields %}
-        {% if field.type == 'section' %}
-          {% set ns.pending_section = field %}
-        {% elif field.type == 'rating' %}
+        {% if field.type == 'rating' %}
           {% set score = form_data.get(field.id | string, '0') | int %}
           {% if score > 0 %}
-            {# Mark every grid row this rating cell spans #}
             {% for r in range(field.row, field.row + field.rowSpan) %}
               {% if r not in ns.rated_rows %}
                 {% set ns.rated_rows = ns.rated_rows + [r] %}
               {% endif %}
             {% endfor %}
-            {# Attach pending section to these rows #}
-            {% if ns.pending_section is not none %}
-              {% set ns.section_rows = ns.section_rows + [(ns.pending_section, field.row)] %}
-              {% set ns.pending_section = none %}
-            {% endif %}
-          {% else %}
-            {% set ns.pending_section = ns.pending_section %}
-          {% endif %}
-        {% else %}
-          {% set ns.pending_section = ns.pending_section %}
-        {% endif %}
-      {% endfor %}
-
-      {# Step 2: collect fields whose rows overlap rated_rows, plus section fields #}
-      {# Build list of (original_row, field) tuples to sort and re-number #}
-      {% set ns2 = namespace(visible=[], section_emitted=[]) %}
-
-      {# First pass: emit section fields just before the first rated row they precede #}
-      {% for sec_field, first_rated_row in ns.section_rows %}
-        {% if first_rated_row not in ns2.section_emitted %}
-          {% set ns2.visible = ns2.visible + [(first_rated_row - 0.5, sec_field)] %}
-          {% set ns2.section_emitted = ns2.section_emitted + [first_rated_row] %}
-        {% endif %}
-      {% endfor %}
-
-      {# Second pass: all fields whose row range overlaps rated_rows #}
-      {% for field in form_fields %}
-        {% if field.type not in ('section', 'label', 'button_submit', 'button_print', 'button_email') %}
-          {% set overlaps = namespace(found=false) %}
-          {% for r in range(field.row, field.row + field.rowSpan) %}
-            {% if r in ns.rated_rows %}
-              {% set overlaps.found = true %}
-            {% endif %}
-          {% endfor %}
-          {% if overlaps.found %}
-            {% set ns2.visible = ns2.visible + [(field.row, field)] %}
           {% endif %}
         {% endif %}
       {% endfor %}
 
-      {# Step 3: sort visible list by sort_key (first element of tuple) #}
-      {# Jinja2 can't sort tuples directly, so use dictsort workaround via a temp dict #}
-      {# Instead, render in original form_fields order (already sorted by row,col) #}
-
-      {# Simpler approach: single pass in original order, re-number rows on the fly #}
-      {# Map original_row -> new_row using the sorted rated_rows list #}
-      {% set sorted_rated = ns.rated_rows | sort %}
-
-      {# Build row mapping: original row number -> compact row number #}
-      {# Sections get row = (first rated row they precede) - 1 in new numbering #}
-      {# We assign new row numbers: section=1, then its data rows=2,3,...  etc. #}
-
-      {# Final render: walk form_fields in order, emit only visible ones with remapped rows #}
-      {% set remap = namespace(out_row=1, last_orig_row=-1, pending_sec=none, pending_sec_orig_row=-1) %}
+      {# Pass 2: render in form_fields order.
+         - section fields: buffer as pending; flush before the first visible data field that follows.
+         - data fields: emit only if their row overlaps rated_rows; remap rows sequentially. #}
+      {% set remap = namespace(out_row=1, last_orig_row=-1, pending_sec=none) %}
 
       <div class="form-grid">
 
@@ -256,7 +206,6 @@
           {# Track pending section #}
           {% if ftype == 'section' %}
             {% set remap.pending_sec = field %}
-            {% set remap.pending_sec_orig_row = field.row %}
 
           {% elif ftype in ('label', 'button_submit', 'button_print', 'button_email') %}
             {# skip #}
