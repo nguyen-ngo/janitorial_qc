@@ -4,139 +4,94 @@
 {% block extra_css %}
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  body { font-family:'DM Sans',sans-serif; background:#eef0f4; }
-  .insp-wrap { max-width:860px; margin:0 auto; padding:1rem 1rem 4rem; }
-
-  /* Header */
+  body { font-family:'DM Sans', sans-serif; background:#eef0f4; }
+  .insp-wrap { max-width:1000px; margin:0 auto; padding:0 1rem 4rem; }
   .insp-header {
-    background:#1a1d23; color:#fff;
-    padding:1rem 1.5rem; border-radius:12px 12px 0 0;
+    background:#1a1d23; color:#fff; padding:1.1rem 1.75rem;
+    border-radius:12px 12px 0 0;
     display:flex; align-items:center; justify-content:space-between; gap:1rem;
   }
-  .insp-header h5  { margin:0; font-weight:600; font-size:.98rem; }
-  .insp-header .sub{ font-size:.76rem; color:#94a3b8; margin-top:.15rem; }
-  .score-pill {
-    font-size:1rem; font-weight:700;
-    padding:.28rem .8rem; border-radius:8px; white-space:nowrap;
+  .insp-header h4 { margin:0; font-weight:600; font-size:1.05rem; }
+  .insp-header .sub { font-size:.78rem; color:#94a3b8; margin-top:.2rem; }
+  .score-badge {
+    font-size:1.5rem; font-weight:700; padding:.4rem 1rem;
+    border-radius:8px; min-width:80px; text-align:center;
   }
-
-  /* Body */
   .insp-body {
     background:#fff; border:1px solid #e2e8f0; border-top:none;
-    border-radius:0 0 12px 12px; padding:1.1rem 1.4rem;
+    border-radius:0 0 12px 12px; padding:1.75rem; overflow-x:auto;
   }
+  .meta-row { display:flex; flex-wrap:wrap; gap:1.5rem; margin-bottom:1.5rem; padding-bottom:1rem; border-bottom:1px solid #e2e8f0; }
+  .meta-item { display:flex; flex-direction:column; }
+  .meta-item .lbl { font-size:.72rem; color:#94a3b8; font-weight:500; text-transform:uppercase; letter-spacing:.04em; }
+  .meta-item .val { font-size:.9rem; color:#0f172a; font-weight:500; margin-top:.1rem; }
 
-  /* Meta strip */
-  .meta-strip {
-    display:flex; flex-wrap:wrap; gap:1.1rem;
-    padding-bottom:.75rem; margin-bottom:.9rem;
-    border-bottom:1px solid #f1f5f9;
+  /* Grid — 52px rows matches the form editor exactly */
+  .form-grid {
+    display:grid; grid-template-columns:repeat(12,72px);
+    grid-auto-rows:52px; gap:4px 8px; width:max-content;
   }
-  .meta-item .lbl {
-    font-size:.67rem; color:#94a3b8; font-weight:600;
-    text-transform:uppercase; letter-spacing:.05em; display:block;
+  .fg-cell { overflow:hidden; display:flex; flex-direction:column; padding:.18rem .45rem; }
+  .fg-cell .field-lbl { font-size:.7rem; font-weight:500; color:#64748b; margin-bottom:.1rem; display:block; flex-shrink:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .fg-cell .field-val {
+    font-size:.78rem; color:#0f172a; background:#f8fafc;
+    border:1px solid #e2e8f0; border-radius:4px;
+    padding:.18rem .35rem; flex:1; min-height:0;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
-  .meta-item .val { font-size:.82rem; color:#0f172a; font-weight:500; }
-  .score-bar-bg   { background:#f1f5f9; border-radius:4px; height:5px; overflow:hidden; margin:.25rem 0 .15rem; }
-  .score-bar-fill { height:100%; border-radius:4px; }
+  .fg-cell .field-val.empty { color:#94a3b8; font-style:italic; }
+  .section-divider { height:100%; display:flex; align-items:center; border-top:2px solid #e2e8f0; }
+  .section-divider strong { font-weight:700; color:#374151; font-size:.9rem; }
 
-  /* Section heading */
-  .section-heading {
-    font-size:.67rem; font-weight:700; color:#64748b;
-    text-transform:uppercase; letter-spacing:.08em;
-    margin:1rem 0 .3rem; padding-bottom:.25rem;
-    border-bottom:2px solid #e2e8f0;
-  }
+  /* Rating — single line */
+  .rating-line { display:flex; align-items:center; gap:.3rem; flex:1; min-height:0; }
+  .rating-stars-ro { color:#f59e0b; font-size:.95rem; letter-spacing:.03rem; line-height:1; white-space:nowrap; }
+  .rating-score    { font-size:.72rem; color:#64748b; white-space:nowrap; }
 
-  /* Field rows — all types share this single-line layout */
-  .field-row {
-    display:flex; align-items:center; gap:.6rem;
-    padding:.28rem .4rem; border-radius:5px; min-height:28px;
-  }
-  .field-row:hover { background:#f8fafc; }
-  .field-row + .field-row { border-top:1px solid #f8fafc; }
-
-  .f-label {
-    font-size:.78rem; color:#64748b; font-weight:500;
-    flex:0 0 220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-  }
-  .f-value {
-    font-size:.82rem; color:#0f172a; flex:1; min-width:0;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-  }
-  .f-value.empty { color:#cbd5e1; font-style:italic; }
-
-  /* Stars */
-  .stars { color:#f59e0b; font-size:.88rem; letter-spacing:.03rem; line-height:1; }
-  .score-txt { font-size:.7rem; color:#64748b; white-space:nowrap; margin-left:.25rem; }
-
-  /* Checkbox / badge values */
-  .val-checked   { color:#16a34a; font-size:.8rem; }
-  .val-unchecked { color:#cbd5e1; font-size:.8rem; }
-  .opt-badge { font-size:.68rem; padding:.1rem .4rem; border-radius:4px; background:#e0e7ff; color:#3730a3; margin-right:.2rem; }
-
-  /* View Photo button */
-  .btn-photo {
-    font-size:.7rem; padding:.14rem .48rem; border-radius:5px;
+  /* View Photo / Signature button */
+  .btn-view-media {
+    display:inline-flex; align-items:center; gap:.25rem;
+    font-size:.7rem; padding:.15rem .48rem; border-radius:4px;
     border:1px solid #cbd5e1; background:#f8fafc; color:#374151;
-    cursor:pointer; display:inline-flex; align-items:center; gap:.25rem;
-    flex-shrink:0; transition:border-color .12s, background .12s;
-    white-space:nowrap;
+    cursor:pointer; white-space:nowrap; flex-shrink:0;
+    transition:border-color .12s, background .12s;
   }
-  .btn-photo:hover { border-color:#2563eb; background:#eff6ff; color:#2563eb; }
+  .btn-view-media:hover { border-color:#2563eb; background:#eff6ff; color:#2563eb; }
 
-  /* Photo modal */
-  .photo-backdrop {
+  .tbl-view { width:100%; border-collapse:collapse; font-size:.76rem; }
+  .tbl-view th { background:#f1f5f9; font-weight:600; color:#374151; padding:.2rem .4rem; border:1px solid #e2e8f0; font-size:.73rem; }
+  .tbl-view td { border:1px solid #e2e8f0; padding:.15rem .4rem; color:#0f172a; }
+
+  /* Photo / signature lightbox */
+  .media-backdrop {
     display:none; position:fixed; inset:0; z-index:1055;
-    background:rgba(0,0,0,.65);
-    align-items:center; justify-content:center;
+    background:rgba(0,0,0,.65); align-items:center; justify-content:center;
   }
-  .photo-backdrop.open { display:flex; }
-  .photo-modal {
+  .media-backdrop.open { display:flex; }
+  .media-modal {
     background:#fff; border-radius:10px; overflow:hidden;
     max-width:min(92vw,700px); max-height:90vh;
     display:flex; flex-direction:column;
     box-shadow:0 8px 40px rgba(0,0,0,.35);
   }
-  .photo-modal-head {
+  .media-modal-head {
     display:flex; align-items:center; justify-content:space-between;
     padding:.5rem .9rem; border-bottom:1px solid #e2e8f0;
     font-size:.8rem; font-weight:600; color:#374151;
   }
-  .photo-modal-close {
-    border:none; background:none; font-size:1.1rem;
-    color:#64748b; cursor:pointer; line-height:1; padding:0;
-  }
-  .photo-modal-close:hover { color:#dc2626; }
-  .photo-modal img {
-    display:block; max-width:100%;
-    max-height:calc(90vh - 46px); object-fit:contain;
-  }
-
-  /* Table field */
-  .tbl-inline { width:100%; border-collapse:collapse; font-size:.75rem; margin-top:.2rem; }
-  .tbl-inline th { background:#f1f5f9; font-weight:600; color:#374151; padding:.2rem .4rem; border:1px solid #e2e8f0; }
-  .tbl-inline td { border:1px solid #e2e8f0; padding:.18rem .4rem; color:#0f172a; }
-
-  /* Signature */
-  .sig-thumb { max-height:32px; border:1px solid #e2e8f0; border-radius:3px; background:#fff; }
-
-  /* Issues */
-  .issues-section { margin-top:1.25rem; }
-  .issues-section h6 {
-    font-size:.7rem; font-weight:700; color:#dc2626;
-    text-transform:uppercase; letter-spacing:.06em; margin-bottom:.4rem;
-  }
+  .media-modal-close { border:none; background:none; font-size:1.1rem; color:#64748b; cursor:pointer; line-height:1; padding:0; }
+  .media-modal-close:hover { color:#dc2626; }
+  .media-modal img { display:block; max-width:100%; max-height:calc(90vh - 46px); object-fit:contain; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="insp-wrap mt-2">
+<div class="insp-wrap mt-3">
 
   {# Action bar #}
-  <div class="d-flex justify-content-between align-items-center mb-2">
+  <div class="d-flex justify-content-between align-items-center mb-3">
     <a href="{{ url_for('inspections.index') }}" class="btn btn-sm btn-outline-secondary">
-      <i class="bi bi-arrow-left"></i> Back
+      <i class="bi bi-arrow-left"></i> Back to Inspections
     </a>
     <div class="d-flex gap-2">
       <button onclick="window.print()" class="btn btn-sm btn-outline-secondary">
@@ -155,18 +110,18 @@
   {# Header #}
   <div class="insp-header">
     <div>
-      <h5><i class="bi bi-clipboard-check me-1"></i>{{ inspection.template.name }}</h5>
+      <h4><i class="bi bi-clipboard-check"></i> {{ inspection.template.name }}</h4>
       <div class="sub">
         {{ inspection.facility.name }}{% if inspection.area %} · {{ inspection.area.name }}{% endif %}
-        · Inspector: <strong style="color:#e2e8f0;">{{ inspection.inspector.username }}</strong>
+        &nbsp;·&nbsp; Inspector: <strong style="color:#e2e8f0;">{{ inspection.inspector.username }}</strong>
       </div>
     </div>
     <div class="d-flex align-items-center gap-2">
-      <span class="badge bg-{{ 'success' if inspection.status == 'completed' else 'danger' if inspection.status == 'flagged' else 'secondary' }}">
+      <span class="badge bg-{{ 'success' if inspection.status == 'completed' else 'danger' if inspection.status == 'flagged' else 'secondary' }} fs-6">
         {{ inspection.status|replace('_',' ')|title }}
       </span>
       {% if inspection.overall_score is not none %}
-      <div class="score-pill bg-{{ 'success' if inspection.overall_score >= 90 else 'warning' if inspection.overall_score >= 70 else 'danger' }} text-white">
+      <div class="score-badge bg-{{ 'success' if inspection.overall_score >= 90 else 'warning' if inspection.overall_score >= 70 else 'danger' }} text-white">
         {{ inspection.overall_score }}%
       </div>
       {% endif %}
@@ -175,16 +130,16 @@
 
   <div class="insp-body">
 
-    {# Meta strip #}
-    <div class="meta-strip">
+    {# Meta row #}
+    <div class="meta-row">
       <div class="meta-item">
         <span class="lbl">Date</span>
-        <span class="val">{{ inspection.inspection_date.strftime('%b %d, %Y %H:%M') }}</span>
+        <span class="val">{{ inspection.inspection_date.strftime('%B %d, %Y %H:%M') }}</span>
       </div>
       {% if inspection.completed_at %}
       <div class="meta-item">
         <span class="lbl">Completed</span>
-        <span class="val">{{ inspection.completed_at.strftime('%b %d, %Y %H:%M') }}</span>
+        <span class="val">{{ inspection.completed_at.strftime('%B %d, %Y %H:%M') }}</span>
       </div>
       {% endif %}
       <div class="meta-item">
@@ -195,196 +150,172 @@
         <span class="lbl">Frequency</span>
         <span class="val">{{ inspection.template.frequency|title }}</span>
       </div>
-      {% if inspection.overall_score is not none %}
-      <div class="meta-item" style="min-width:130px;">
-        <span class="lbl">Overall Score</span>
-        <div class="score-bar-bg">
-          <div class="score-bar-fill bg-{{ 'success' if inspection.overall_score >= 90 else 'warning' if inspection.overall_score >= 70 else 'danger' }}"
-               style="width:{{ inspection.overall_score }}%;"></div>
-        </div>
-        <span class="val">{{ inspection.overall_score }}%</span>
-      </div>
-      {% endif %}
     </div>
 
-    {# All form fields — compact single-line rows, grouped by section #}
+    {# Form field responses #}
     {% if form_fields %}
-      {% set ns = namespace(pending_section='') %}
-
+    <div class="form-grid">
       {% for field in form_fields %}
-        {% set ftype = field.type %}
-        {% set fid   = field.id | string %}
-        {% set val   = form_data.get(fid, '') %}
+      {% set fid = field.id %}
+      {% set val = form_data.get(fid) %}
 
-        {# Section heading — buffer it, only flush when a visible field follows #}
-        {% if ftype == 'section' %}
-          {% set ns.pending_section = field.label %}
+      <div class="fg-cell"
+           style="grid-column: {{ field.col }} / span {{ field.colSpan }};
+                  grid-row:    {{ field.row }} / span {{ field.rowSpan }};">
 
-        {# Skip display-only types #}
-        {% elif ftype in ('label', 'button_submit', 'button_print', 'button_email') %}
+        {% if field.type == 'section' %}
+          <div class="section-divider"><strong>{{ field.label }}</strong></div>
 
-        {# All input field types — render as compact row #}
-        {% else %}
+        {% elif field.type == 'label' %}
+          {% set fs_map = {'small':'0.76rem','normal':'0.86rem','large':'1rem','x-large':'1.15rem'} %}
+          <div style="font-size:{{ fs_map.get(field.font_size or 'normal','0.86rem') }};
+                      font-weight:{{ field.font_weight or 'normal' }};color:#374151;
+                      line-height:1.4;overflow:hidden;height:100%;">{{ field.text_content or '' }}</div>
 
-          {# Flush pending section header #}
-          {% if ns.pending_section %}
-            <div class="section-heading">{{ ns.pending_section }}</div>
-            {% set ns.pending_section = '' %}
+        {% elif field.type in ('button_submit','button_print','button_email') %}
+          {# hidden in read-only view #}
+
+        {% elif field.type == 'rating' %}
+          <span class="field-lbl">{{ field.label }}</span>
+          <div class="rating-line">
+            {% if val and val|int > 0 %}
+              <span class="rating-stars-ro">{% for i in range(1,6) %}{{ '★' if i <= (val|int) else '☆' }}{% endfor %}</span>
+              <span class="rating-score">{{ val }}/5</span>
+            {% else %}
+              <span style="font-size:.75rem;color:#94a3b8;font-style:italic;">Not rated</span>
+            {% endif %}
+          </div>
+
+        {% elif field.type == 'image' %}
+          <span class="field-lbl">{{ field.label }}</span>
+          <div style="display:flex;align-items:center;flex:1;min-height:0;">
+            {% if val %}
+            <button type="button" class="btn-view-media"
+                    onclick="openMedia('{{ url_for('static', filename=val) }}', '{{ field.label | e }}')">
+              <i class="bi bi-image"></i> View Photo
+            </button>
+            {% else %}
+            <span style="font-size:.75rem;color:#94a3b8;font-style:italic;">No photo</span>
+            {% endif %}
+          </div>
+
+        {% elif field.type == 'signature' %}
+          <span class="field-lbl">{{ field.label }}</span>
+          <div style="display:flex;align-items:center;flex:1;min-height:0;">
+            {% if val and val.startswith('data:') %}
+            <button type="button" class="btn-view-media"
+                    onclick="openMedia('{{ val }}', '{{ field.label | e }}')">
+              <i class="bi bi-pen"></i> View Signature
+            </button>
+            {% else %}
+            <span style="font-size:.75rem;color:#94a3b8;font-style:italic;">No signature</span>
+            {% endif %}
+          </div>
+
+        {% elif field.type == 'checkbox' %}
+          <span class="field-lbl">{{ field.label }}</span>
+          <div class="field-val">
+            {% if val == 'yes' %}
+            <span class="text-success"><i class="bi bi-check-circle-fill"></i> Yes</span>
+            {% else %}
+            <span class="text-muted"><i class="bi bi-circle"></i> No</span>
+            {% endif %}
+          </div>
+
+        {% elif field.type == 'checkbox_group' %}
+          <span class="field-lbl">{{ field.label }}</span>
+          <div class="field-val" style="overflow:auto;white-space:normal;">
+            {% if val and val is iterable and val is not string %}
+              {% for item in val %}<span class="badge bg-primary me-1" style="font-size:.65rem;">{{ item }}</span>{% endfor %}
+            {% else %}
+            <span class="empty">None selected</span>
+            {% endif %}
+          </div>
+
+        {% elif field.type == 'table' %}
+          <span class="field-lbl">{{ field.label }}</span>
+          {% if val and val is iterable and val is not string %}
+          <div style="overflow:auto;flex:1;min-height:0;">
+            <table class="tbl-view">
+              <thead><tr>{% for hdr in (field.col_headers or ['Column 1']) %}<th>{{ hdr }}</th>{% endfor %}</tr></thead>
+              <tbody>
+                {% for row in val %}
+                <tr>{% for hdr in (field.col_headers or ['Column 1']) %}<td>{{ row.get(hdr,'') }}</td>{% endfor %}</tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="field-val empty">No data</div>
           {% endif %}
 
-          <div class="field-row">
-            <span class="f-label">{{ field.label }}</span>
-
-            {# ── Rating ── #}
-            {% if ftype == 'rating' %}
-              {% set score = val | int %}
-              {% if score > 0 %}
-                <span class="f-value">
-                  <span class="stars">{% for i in range(1,6) %}{{ '★' if i <= score else '☆' }}{% endfor %}</span>
-                  <span class="score-txt">{{ score }}/5</span>
-                </span>
-              {% else %}
-                <span class="f-value empty">Not rated</span>
-              {% endif %}
-
-            {# ── Image / Photo ── #}
-            {% elif ftype == 'image' %}
-              {% if val %}
-                <span class="f-value"></span>
-                <button type="button" class="btn-photo"
-                        onclick="openPhoto('{{ url_for('static', filename=val) }}', '{{ field.label | e }}')">
-                  <i class="bi bi-image"></i> View Photo
-                </button>
-              {% else %}
-                <span class="f-value empty">No photo</span>
-              {% endif %}
-
-            {# ── Signature ── #}
-            {% elif ftype == 'signature' %}
-              {% if val and val.startswith('data:') %}
-                <span class="f-value"></span>
-                <button type="button" class="btn-photo"
-                        onclick="openPhoto('{{ val }}', '{{ field.label | e }}')">
-                  <i class="bi bi-pen"></i> View Signature
-                </button>
-              {% else %}
-                <span class="f-value empty">No signature</span>
-              {% endif %}
-
-            {# ── Checkbox single ── #}
-            {% elif ftype == 'checkbox' %}
-              {% if val == 'yes' %}
-                <span class="f-value val-checked"><i class="bi bi-check-circle-fill"></i> Yes</span>
-              {% else %}
-                <span class="f-value val-unchecked"><i class="bi bi-circle"></i> No</span>
-              {% endif %}
-
-            {# ── Checkbox group ── #}
-            {% elif ftype == 'checkbox_group' %}
-              <span class="f-value">
-                {% if val and val is iterable and val is not string and val | length > 0 %}
-                  {% for opt in val %}<span class="opt-badge">{{ opt }}</span>{% endfor %}
-                {% else %}
-                  <span class="empty">None selected</span>
-                {% endif %}
-              </span>
-
-            {# ── Table ── #}
-            {% elif ftype == 'table' %}
-              <span class="f-value" style="overflow:auto; white-space:normal; flex:1;">
-                {% if val and val is iterable and val is not string %}
-                <table class="tbl-inline">
-                  <thead><tr>
-                    {% for hdr in (field.col_headers or ['Column 1']) %}<th>{{ hdr }}</th>{% endfor %}
-                  </tr></thead>
-                  <tbody>
-                    {% for row in val %}
-                    <tr>{% for hdr in (field.col_headers or ['Column 1']) %}<td>{{ row.get(hdr,'') }}</td>{% endfor %}</tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
-                {% else %}
-                <span class="empty">No data</span>
-                {% endif %}
-              </span>
-
-            {# ── Everything else: text, textarea, number, date, email, radio, select ── #}
-            {% else %}
-              {% if val %}
-                <span class="f-value" title="{{ val }}">{{ val }}</span>
-              {% else %}
-                <span class="f-value empty">—</span>
-              {% endif %}
-            {% endif %}
-
-          </div>{# /field-row #}
+        {% else %}
+          {# text, textarea, number, date, email, radio, select #}
+          <span class="field-lbl">{{ field.label }}</span>
+          <div class="field-val {{ 'empty' if not val }}">{{ val or '—' }}</div>
         {% endif %}
+
+      </div>
       {% endfor %}
+    </div>
 
     {% else %}
-    <p class="text-muted small mb-0">No form fields found for this template.</p>
+    <p class="text-muted">No form fields found for this template.</p>
     {% endif %}
 
     {# Issues #}
     {% if issues %}
-    <div class="issues-section">
-      <h6><i class="bi bi-exclamation-triangle me-1"></i>Issues ({{ issues|length }})</h6>
-      <div class="table-responsive">
-        <table class="table table-sm table-hover mb-0">
-          <thead class="table-light">
-            <tr>
-              <th style="font-size:.75rem;">Severity</th>
-              <th style="font-size:.75rem;">Area</th>
-              <th style="font-size:.75rem;">Description</th>
-              <th style="font-size:.75rem;">Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for issue in issues %}
-            <tr>
-              <td><span class="badge bg-{{ 'danger' if issue.severity in ['critical','high'] else 'warning text-dark' if issue.severity == 'medium' else 'secondary' }}">{{ issue.severity|title }}</span></td>
-              <td style="font-size:.8rem;">{{ issue.area.name }}</td>
-              <td style="font-size:.8rem;">{{ issue.description[:80] }}{% if issue.description|length > 80 %}…{% endif %}</td>
-              <td><span class="badge bg-{{ 'success' if issue.status == 'resolved' else 'warning text-dark' if issue.status == 'in_progress' else 'secondary' }}">{{ issue.status|replace('_',' ')|title }}</span></td>
-              <td><a href="{{ url_for('issues.view', issue_id=issue.id) }}" class="btn btn-sm btn-outline-secondary py-0">View</a></td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+    <hr class="mt-4">
+    <h6 class="text-danger"><i class="bi bi-exclamation-triangle"></i> Issues Logged ({{ issues|length }})</h6>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover">
+        <thead class="table-light">
+          <tr><th>Severity</th><th>Area</th><th>Description</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for issue in issues %}
+          <tr>
+            <td><span class="badge bg-{{ 'danger' if issue.severity in ['critical','high'] else 'warning text-dark' if issue.severity == 'medium' else 'secondary' }}">{{ issue.severity|title }}</span></td>
+            <td>{{ issue.area.name }}</td>
+            <td>{{ issue.description[:80] }}{% if issue.description|length > 80 %}…{% endif %}</td>
+            <td><span class="badge bg-{{ 'success' if issue.status == 'resolved' else 'warning text-dark' if issue.status == 'in_progress' else 'secondary' }}">{{ issue.status|replace('_',' ')|title }}</span></td>
+            <td><a href="{{ url_for('issues.view', issue_id=issue.id) }}" class="btn btn-sm btn-outline-secondary">View</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
     {% endif %}
 
-  </div>{# /insp-body #}
-</div>{# /insp-wrap #}
+  </div>
+</div>
 
 {# Photo / Signature lightbox #}
-<div class="photo-backdrop" id="photoModal" onclick="closeOnBackdrop(event)">
-  <div class="photo-modal">
-    <div class="photo-modal-head">
-      <span id="photoLabel">Photo</span>
-      <button class="photo-modal-close" onclick="closePhoto()" aria-label="Close">&times;</button>
+<div class="media-backdrop" id="mediaModal" onclick="closeOnBackdrop(event)">
+  <div class="media-modal">
+    <div class="media-modal-head">
+      <span id="mediaLabel">Photo</span>
+      <button class="media-modal-close" onclick="closeMedia()" aria-label="Close">&times;</button>
     </div>
-    <img id="photoImg" src="" alt="Photo">
+    <img id="mediaImg" src="" alt="">
   </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-function openPhoto(src, label) {
-  document.getElementById('photoImg').src           = src;
-  document.getElementById('photoLabel').textContent = label;
-  document.getElementById('photoModal').classList.add('open');
+function openMedia(src, label) {
+  document.getElementById('mediaImg').src           = src;
+  document.getElementById('mediaLabel').textContent = label;
+  document.getElementById('mediaModal').classList.add('open');
 }
-function closePhoto() {
-  document.getElementById('photoModal').classList.remove('open');
-  document.getElementById('photoImg').src = '';
+function closeMedia() {
+  document.getElementById('mediaModal').classList.remove('open');
+  document.getElementById('mediaImg').src = '';
 }
 function closeOnBackdrop(e) {
-  if (e.target.id === 'photoModal') closePhoto();
+  if (e.target.id === 'mediaModal') closeMedia();
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closePhoto(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMedia(); });
 </script>
 {% endblock %}
