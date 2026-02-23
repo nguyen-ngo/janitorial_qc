@@ -178,8 +178,10 @@
     #}
     {% if form_fields %}
 
-      {# Pass 1: collect grid row numbers that contain a rated (score>0) rating field #}
-      {% set ns = namespace(rated_rows=[]) %}
+      {# Pass 1: find all rated rows AND which label IDs have a rated field after them #}
+      {% set ns = namespace(rated_rows=[], visible_label_ids=[]) %}
+
+      {# 1a: collect rated row numbers #}
       {% for field in form_fields %}
         {% if field.type == 'rating' %}
           {% set score = form_data.get(field.id | string, '0') | int %}
@@ -193,9 +195,29 @@
         {% endif %}
       {% endfor %}
 
-      {# Pass 2: render in form_fields order.
-         - section fields: buffer as pending; flush before the first visible data field that follows.
-         - data fields: emit only if their row overlaps rated_rows; remap rows sequentially. #}
+      {# 1b: walk fields in order; accumulate label IDs.
+             When we hit a rated field (score>0), mark ALL accumulated label IDs as visible
+             and clear the buffer. Never clear the buffer for non-rating fields — labels
+             can sit several rows above the ratings they introduce. #}
+      {% set lbuf = namespace(ids=[]) %}
+      {% for field in form_fields %}
+        {% if field.type == 'label' %}
+          {% set lbuf.ids = lbuf.ids + [field.id] %}
+        {% elif field.type == 'rating' %}
+          {% set score = form_data.get(field.id | string, '0') | int %}
+          {% if score > 0 %}
+            {% for lid in lbuf.ids %}
+              {% if lid not in ns.visible_label_ids %}
+                {% set ns.visible_label_ids = ns.visible_label_ids + [lid] %}
+              {% endif %}
+            {% endfor %}
+            {% set lbuf.ids = [] %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+
+      {# Pass 2: render — labels only if in visible_label_ids,
+         data fields only if row overlaps rated_rows, sections always buffered. #}
       {% set remap = namespace(out_row=1, last_orig_row=-1, pending_sec=none) %}
 
       <div class="form-grid">
@@ -207,8 +229,27 @@
           {% if ftype == 'section' %}
             {% set remap.pending_sec = field %}
 
-          {% elif ftype in ('label', 'button_submit', 'button_print', 'button_email') %}
-            {# skip #}
+          {% elif ftype in ('button_submit', 'button_print', 'button_email') %}
+            {# skip — action buttons not shown in read-only view #}
+
+          {% elif ftype == 'label' %}
+            {# Only show labels that are ancestors of rated fields #}
+            {% if field.id in ns.visible_label_ids %}
+              {% if remap.last_orig_row != -1 %}
+                {% set remap.out_row = remap.out_row + 1 %}
+              {% endif %}
+              {% set remap.last_orig_row = field.row %}
+              {% set fs_map = {'small':'0.72rem','normal':'0.82rem','large':'0.96rem','x-large':'1.1rem'} %}
+              <div class="fg-cell"
+                   style="grid-column: {{ field.col }} / span {{ field.colSpan }};
+                          grid-row: {{ remap.out_row }} / span 1;">
+                <div style="font-size:{{ fs_map.get(field.font_size or 'normal','0.82rem') }};
+                            font-weight:{{ field.font_weight or 'normal' }};
+                            color:#374151; overflow:hidden; display:flex; align-items:center; height:100%;">
+                  {{ field.text_content or '' }}
+                </div>
+              </div>
+            {% endif %}
 
           {% else %}
             {# Check if this field overlaps any rated row #}
