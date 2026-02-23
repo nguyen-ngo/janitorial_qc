@@ -73,11 +73,10 @@ def index():
     ).scalar()
     
     # Recent inspections
-    recent_inspections_query = Inspection.query.order_by(Inspection.inspection_date.desc()).limit(5)
+    recent_inspections_query = Inspection.query.order_by(Inspection.inspection_date.desc())
     if current_user.role == 'inspector':
         recent_inspections_query = recent_inspections_query.filter(Inspection.inspector_id == current_user.id)
-    
-    recent_inspections = recent_inspections_query.all()
+    recent_inspections = recent_inspections_query.limit(5).all()
     
     # System statistics (admin/supervisor only)
     total_facilities = Facility.query.filter_by(active=True).count() if current_user.role in ['admin', 'supervisor'] else 0

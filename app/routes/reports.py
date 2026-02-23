@@ -126,11 +126,11 @@ def index():
         completed=completed,
         flagged=flagged,
         avg_score=round(float(avg_score), 2) if avg_score else None,
-        facility_scores=facility_scores,
-        daily_scores=daily_scores,
-        issue_severity=issue_severity,
-        issue_status=issue_status,
-        top_inspectors=top_inspectors,
+        facility_scores=[{'name': r.name, 'avg_score': round(float(r.avg_score), 2), 'count': r.count} for r in facility_scores],
+        daily_scores=[{'day': str(r.day), 'avg': round(float(r.avg), 2), 'count': r.count} for r in daily_scores],
+        issue_severity=[{'severity': r.severity, 'count': r.count} for r in issue_severity],
+        issue_status=[{'status': r.status, 'count': r.count} for r in issue_status],
+        top_inspectors=[{'username': r.username, 'count': r.count, 'avg_score': round(float(r.avg_score), 2) if r.avg_score else None} for r in top_inspectors],
         critical_issues=critical_issues,
     )
 

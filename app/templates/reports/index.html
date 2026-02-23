@@ -170,7 +170,6 @@ const BLUE   = '#0d6efd', GREEN  = '#198754', RED  = '#dc3545',
       AMBER  = '#ffc107', TEAL   = '#0dcaf0', GRAY = '#adb5bd';
 
 // ── Trend chart ──────────────────────────────────────────────────────────────
-const trendData = {{ daily_scores | map(attribute=0) | list | tojson }};  {# dates #}
 new Chart(document.getElementById('trendChart'), {
   type: 'line',
   data: {
