@@ -105,10 +105,12 @@ def _compute_score_from_form(form_fields, responses):
         if field['type'] == 'rating':
             try:
                 v = int(val)
+                if v == 0:
+                    continue   # 0 = not answered, skip entirely
                 earned += v
-                total  += 5   # max rating is 5 stars
+                total  += 5
             except (ValueError, TypeError):
-                total += 5
+                pass  # unparseable = not answered, skip
 
         elif field['type'] == 'checkbox':
             total  += 1
