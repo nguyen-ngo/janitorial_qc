@@ -385,9 +385,7 @@
     </div>
   </div>
 
-  {# Schema is injected via a typed script tag — tojson escapes </script> sequences
-     so this is safe. The JS init reads window.__FORM_SCHEMA__ directly. #}
-  <script type="application/json" id="schema-data">{{ form_schema | tojson }}</script>
+
 
   <!-- PROPERTIES -->
   <div class="props-panel">
@@ -408,9 +406,9 @@
 // ═══════════════════════════════════════════════════════════════════════════
 //  CONSTANTS  (keep in sync with CSS vars)
 // ═══════════════════════════════════════════════════════════════════════════
-const SAVE_URL   = "{{ url_for('templates.save_form_schema', template_id=template.id) }}";
-// csrf_token() is a Flask-WTF global available in all templates
-const CSRF_TOKEN = "{{ csrf_token() }}";
+const SAVE_URL      = "{{ url_for('templates.save_form_schema', template_id=template.id) }}";
+const CSRF_TOKEN    = "{{ csrf_token() }}";
+const INITIAL_SCHEMA = {{ form_schema | tojson }};
 
 const COLS   = 12;
 const CELL_W = 72;   // px — matches --cell-w
@@ -491,8 +489,7 @@ function growSurface() {
 //  INIT
 // ═══════════════════════════════════════════════════════════════════════════
 (function init() {
-  // Retrieve schema from the typed script tag (safe — tojson escapes </script> sequences)
-  const raw = JSON.parse(document.getElementById('schema-data').textContent || '[]');
+  const raw = Array.isArray(INITIAL_SCHEMA) ? INITIAL_SCHEMA : [];
   if (Array.isArray(raw) && raw.length) {
     fields = raw.map(f => ({
       ...f,
