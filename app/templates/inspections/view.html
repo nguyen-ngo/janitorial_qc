@@ -5,8 +5,7 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   body { font-family:'DM Sans',sans-serif; background:#eef0f4; }
-
-  .insp-wrap  { max-width:860px; margin:0 auto; padding:1rem 1rem 4rem; }
+  .insp-wrap { max-width:860px; margin:0 auto; padding:1rem 1rem 4rem; }
 
   /* Header */
   .insp-header {
@@ -38,39 +37,51 @@
     text-transform:uppercase; letter-spacing:.05em; display:block;
   }
   .meta-item .val { font-size:.82rem; color:#0f172a; font-weight:500; }
-
-  /* Score bar */
   .score-bar-bg   { background:#f1f5f9; border-radius:4px; height:5px; overflow:hidden; margin:.25rem 0 .15rem; }
   .score-bar-fill { height:100%; border-radius:4px; }
 
   /* Section heading */
   .section-heading {
-    font-size:.68rem; font-weight:700; color:#64748b;
+    font-size:.67rem; font-weight:700; color:#64748b;
     text-transform:uppercase; letter-spacing:.08em;
-    margin:1rem 0 .35rem; padding-bottom:.28rem;
+    margin:1rem 0 .3rem; padding-bottom:.25rem;
     border-bottom:2px solid #e2e8f0;
   }
 
-  /* Rating rows */
-  .rating-row {
-    display:flex; align-items:center; gap:.75rem;
-    padding:.35rem .5rem; border-radius:6px;
+  /* Field rows — all types share this single-line layout */
+  .field-row {
+    display:flex; align-items:center; gap:.6rem;
+    padding:.28rem .4rem; border-radius:5px; min-height:28px;
   }
-  .rating-row:hover { background:#f8fafc; }
-  .rating-row + .rating-row { border-top:1px solid #f8fafc; }
+  .field-row:hover { background:#f8fafc; }
+  .field-row + .field-row { border-top:1px solid #f8fafc; }
 
-  .rating-label { font-size:.82rem; color:#374151; font-weight:500; flex:1; min-width:0; }
+  .f-label {
+    font-size:.78rem; color:#64748b; font-weight:500;
+    flex:0 0 220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .f-value {
+    font-size:.82rem; color:#0f172a; flex:1; min-width:0;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .f-value.empty { color:#cbd5e1; font-style:italic; }
 
-  .stars-wrap { display:flex; align-items:center; gap:.3rem; flex-shrink:0; }
-  .stars      { color:#f59e0b; font-size:.95rem; letter-spacing:.03rem; line-height:1; }
-  .score-txt  { font-size:.7rem; color:#64748b; white-space:nowrap; }
+  /* Stars */
+  .stars { color:#f59e0b; font-size:.88rem; letter-spacing:.03rem; line-height:1; }
+  .score-txt { font-size:.7rem; color:#64748b; white-space:nowrap; margin-left:.25rem; }
+
+  /* Checkbox / badge values */
+  .val-checked   { color:#16a34a; font-size:.8rem; }
+  .val-unchecked { color:#cbd5e1; font-size:.8rem; }
+  .opt-badge { font-size:.68rem; padding:.1rem .4rem; border-radius:4px; background:#e0e7ff; color:#3730a3; margin-right:.2rem; }
 
   /* View Photo button */
   .btn-photo {
-    font-size:.7rem; padding:.15rem .5rem; border-radius:5px;
+    font-size:.7rem; padding:.14rem .48rem; border-radius:5px;
     border:1px solid #cbd5e1; background:#f8fafc; color:#374151;
     cursor:pointer; display:inline-flex; align-items:center; gap:.25rem;
     flex-shrink:0; transition:border-color .12s, background .12s;
+    white-space:nowrap;
   }
   .btn-photo:hover { border-color:#2563eb; background:#eff6ff; color:#2563eb; }
 
@@ -89,7 +100,7 @@
   }
   .photo-modal-head {
     display:flex; align-items:center; justify-content:space-between;
-    padding:.55rem .9rem; border-bottom:1px solid #e2e8f0;
+    padding:.5rem .9rem; border-bottom:1px solid #e2e8f0;
     font-size:.8rem; font-weight:600; color:#374151;
   }
   .photo-modal-close {
@@ -99,14 +110,22 @@
   .photo-modal-close:hover { color:#dc2626; }
   .photo-modal img {
     display:block; max-width:100%;
-    max-height:calc(90vh - 48px); object-fit:contain;
+    max-height:calc(90vh - 46px); object-fit:contain;
   }
+
+  /* Table field */
+  .tbl-inline { width:100%; border-collapse:collapse; font-size:.75rem; margin-top:.2rem; }
+  .tbl-inline th { background:#f1f5f9; font-weight:600; color:#374151; padding:.2rem .4rem; border:1px solid #e2e8f0; }
+  .tbl-inline td { border:1px solid #e2e8f0; padding:.18rem .4rem; color:#0f172a; }
+
+  /* Signature */
+  .sig-thumb { max-height:32px; border:1px solid #e2e8f0; border-radius:3px; background:#fff; }
 
   /* Issues */
   .issues-section { margin-top:1.25rem; }
   .issues-section h6 {
-    font-size:.73rem; font-weight:700; color:#dc2626;
-    text-transform:uppercase; letter-spacing:.06em; margin-bottom:.45rem;
+    font-size:.7rem; font-weight:700; color:#dc2626;
+    text-transform:uppercase; letter-spacing:.06em; margin-bottom:.4rem;
   }
 </style>
 {% endblock %}
@@ -188,58 +207,119 @@
       {% endif %}
     </div>
 
-    {# Rated fields only, grouped by section #}
+    {# All form fields — compact single-line rows, grouped by section #}
     {% if form_fields %}
-      {# Build a lookup of image fields by row number for pairing with ratings #}
-      {% set ns = namespace(pending_section='', has_any=false) %}
+      {% set ns = namespace(pending_section='') %}
 
       {% for field in form_fields %}
+        {% set ftype = field.type %}
+        {% set fid   = field.id | string %}
+        {% set val   = form_data.get(fid, '') %}
 
-        {% if field.type == 'section' %}
+        {# Section heading — buffer it, only flush when a visible field follows #}
+        {% if ftype == 'section' %}
           {% set ns.pending_section = field.label %}
 
-        {% elif field.type == 'rating' %}
-          {% set fid   = field.id | string %}
-          {% set score = form_data.get(fid, '0') | int %}
+        {# Skip display-only types #}
+        {% elif ftype in ('label', 'button_submit', 'button_print', 'button_email') %}
 
-          {% if score > 0 %}
-            {% set ns.has_any = true %}
+        {# All input field types — render as compact row #}
+        {% else %}
 
-            {# Flush pending section header #}
-            {% if ns.pending_section %}
-              <div class="section-heading">{{ ns.pending_section }}</div>
-              {% set ns.pending_section = '' %}
+          {# Flush pending section header #}
+          {% if ns.pending_section %}
+            <div class="section-heading">{{ ns.pending_section }}</div>
+            {% set ns.pending_section = '' %}
+          {% endif %}
+
+          <div class="field-row">
+            <span class="f-label">{{ field.label }}</span>
+
+            {# ── Rating ── #}
+            {% if ftype == 'rating' %}
+              {% set score = val | int %}
+              {% if score > 0 %}
+                <span class="f-value">
+                  <span class="stars">{% for i in range(1,6) %}{{ '★' if i <= score else '☆' }}{% endfor %}</span>
+                  <span class="score-txt">{{ score }}/5</span>
+                </span>
+              {% else %}
+                <span class="f-value empty">Not rated</span>
+              {% endif %}
+
+            {# ── Image / Photo ── #}
+            {% elif ftype == 'image' %}
+              {% if val %}
+                <span class="f-value"></span>
+                <button type="button" class="btn-photo"
+                        onclick="openPhoto('{{ url_for('static', filename=val) }}', '{{ field.label | e }}')">
+                  <i class="bi bi-image"></i> View Photo
+                </button>
+              {% else %}
+                <span class="f-value empty">No photo</span>
+              {% endif %}
+
+            {# ── Signature ── #}
+            {% elif ftype == 'signature' %}
+              {% if val and val.startswith('data:') %}
+                <span class="f-value"></span>
+                <button type="button" class="btn-photo"
+                        onclick="openPhoto('{{ val }}', '{{ field.label | e }}')">
+                  <i class="bi bi-pen"></i> View Signature
+                </button>
+              {% else %}
+                <span class="f-value empty">No signature</span>
+              {% endif %}
+
+            {# ── Checkbox single ── #}
+            {% elif ftype == 'checkbox' %}
+              {% if val == 'yes' %}
+                <span class="f-value val-checked"><i class="bi bi-check-circle-fill"></i> Yes</span>
+              {% else %}
+                <span class="f-value val-unchecked"><i class="bi bi-circle"></i> No</span>
+              {% endif %}
+
+            {# ── Checkbox group ── #}
+            {% elif ftype == 'checkbox_group' %}
+              <span class="f-value">
+                {% if val and val is iterable and val is not string and val | length > 0 %}
+                  {% for opt in val %}<span class="opt-badge">{{ opt }}</span>{% endfor %}
+                {% else %}
+                  <span class="empty">None selected</span>
+                {% endif %}
+              </span>
+
+            {# ── Table ── #}
+            {% elif ftype == 'table' %}
+              <span class="f-value" style="overflow:auto; white-space:normal; flex:1;">
+                {% if val and val is iterable and val is not string %}
+                <table class="tbl-inline">
+                  <thead><tr>
+                    {% for hdr in (field.col_headers or ['Column 1']) %}<th>{{ hdr }}</th>{% endfor %}
+                  </tr></thead>
+                  <tbody>
+                    {% for row in val %}
+                    <tr>{% for hdr in (field.col_headers or ['Column 1']) %}<td>{{ row.get(hdr,'') }}</td>{% endfor %}</tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+                {% else %}
+                <span class="empty">No data</span>
+                {% endif %}
+              </span>
+
+            {# ── Everything else: text, textarea, number, date, email, radio, select ── #}
+            {% else %}
+              {% if val %}
+                <span class="f-value" title="{{ val }}">{{ val }}</span>
+              {% else %}
+                <span class="f-value empty">—</span>
+              {% endif %}
             {% endif %}
 
-            {# Look for an image field on the same grid row #}
-            {% set photo_url = '' %}
-            {% for other in form_fields %}
-              {% if other.type == 'image' and other.row == field.row %}
-                {% set photo_url = form_data.get(other.id | string, '') %}
-              {% endif %}
-            {% endfor %}
-
-            <div class="rating-row">
-              <span class="rating-label">{{ field.label }}</span>
-              <div class="stars-wrap">
-                <span class="stars">{% for i in range(1,6) %}{{ '★' if i <= score else '☆' }}{% endfor %}</span>
-                <span class="score-txt">{{ score }}/5</span>
-              </div>
-              {% if photo_url %}
-              <button type="button" class="btn-photo"
-                      onclick="openPhoto('{{ url_for('static', filename=photo_url) }}', '{{ field.label | e }}')">
-                <i class="bi bi-image"></i> View Photo
-              </button>
-              {% endif %}
-            </div>
-
-          {% endif %}
+          </div>{# /field-row #}
         {% endif %}
       {% endfor %}
-
-      {% if not ns.has_any %}
-      <p class="text-muted small mb-0 py-2">No rated fields in this inspection.</p>
-      {% endif %}
 
     {% else %}
     <p class="text-muted small mb-0">No form fields found for this template.</p>
@@ -279,14 +359,14 @@
   </div>{# /insp-body #}
 </div>{# /insp-wrap #}
 
-{# Photo lightbox modal #}
+{# Photo / Signature lightbox #}
 <div class="photo-backdrop" id="photoModal" onclick="closeOnBackdrop(event)">
   <div class="photo-modal">
     <div class="photo-modal-head">
       <span id="photoLabel">Photo</span>
       <button class="photo-modal-close" onclick="closePhoto()" aria-label="Close">&times;</button>
     </div>
-    <img id="photoImg" src="" alt="Inspection photo">
+    <img id="photoImg" src="" alt="Photo">
   </div>
 </div>
 {% endblock %}
@@ -294,8 +374,8 @@
 {% block extra_js %}
 <script>
 function openPhoto(src, label) {
-  document.getElementById('photoImg').src              = src;
-  document.getElementById('photoLabel').textContent    = label;
+  document.getElementById('photoImg').src           = src;
+  document.getElementById('photoLabel').textContent = label;
   document.getElementById('photoModal').classList.add('open');
 }
 function closePhoto() {
