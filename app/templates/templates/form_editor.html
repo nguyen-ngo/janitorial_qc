@@ -385,12 +385,9 @@
     </div>
   </div>
 
-  {# Schema data is stored in a data-attribute and parsed with JSON.parse() in JS.
-     This avoids using |safe which bypasses Jinja2 auto-escaping and could allow
-     stored XSS if the sanitiser ever lets a malicious value through. #}
-  <div id="schema-data"
-       data-schema="{{ form_schema | tojson }}"
-       style="display:none;"></div>
+  {# Schema is injected via a typed script tag — tojson escapes </script> sequences
+     so this is safe. The JS init reads window.__FORM_SCHEMA__ directly. #}
+  <script type="application/json" id="schema-data">{{ form_schema | tojson }}</script>
 
   <!-- PROPERTIES -->
   <div class="props-panel">
@@ -494,8 +491,8 @@ function growSurface() {
 //  INIT
 // ═══════════════════════════════════════════════════════════════════════════
 (function init() {
-  // Retrieve schema from the data-attribute (safe — no |safe bypass needed)
-  const raw = JSON.parse(document.getElementById('schema-data').dataset.schema || '[]');
+  // Retrieve schema from the typed script tag (safe — tojson escapes </script> sequences)
+  const raw = JSON.parse(document.getElementById('schema-data').textContent || '[]');
   if (Array.isArray(raw) && raw.length) {
     fields = raw.map(f => ({
       ...f,
