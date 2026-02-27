@@ -70,11 +70,22 @@
                 {{ ins.status|replace('_',' ')|title }}
               </span>
             </td>
-            <td>
+            <td class="text-nowrap">
               {% if ins.status == 'in_progress' or ins.status == 'flagged' %}
               <a href="{{ url_for('inspections.execute', inspection_id=ins.id) }}" class="btn btn-sm btn-outline-primary">Continue</a>
               {% else %}
               <a href="{{ url_for('inspections.view', inspection_id=ins.id) }}" class="btn btn-sm btn-outline-secondary">View</a>
+              {% endif %}
+              {% if current_user.role in ['admin', 'supervisor'] %}
+              <button type="button"
+                      class="btn btn-sm btn-outline-danger ms-1"
+                      data-bs-toggle="modal"
+                      data-bs-target="#deleteInspectionModal"
+                      data-inspection-id="{{ ins.id }}"
+                      data-inspection-label="{{ ins.template.name }} — {{ ins.facility.name }} ({{ ins.inspection_date.strftime('%Y-%m-%d') }})"
+                      title="Delete inspection">
+                <i class="bi bi-trash3"></i>
+              </button>
               {% endif %}
             </td>
           </tr>
@@ -103,4 +114,52 @@
     {% endif %}
   </div>
 </div>
+{% if current_user.role in ['admin', 'supervisor'] %}
+<!-- Delete Inspection Confirmation Modal -->
+<div class="modal fade" id="deleteInspectionModal" tabindex="-1" aria-labelledby="deleteInspectionModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title" id="deleteInspectionModalLabel">
+          <i class="bi bi-exclamation-triangle-fill"></i> Confirm Deletion
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>You are about to permanently delete the following inspection:</p>
+        <p class="fw-bold" id="deleteInspectionLabel"></p>
+        <p class="text-muted mb-0">This will also remove all associated results, flagged issues, and uploaded photos. This action is <strong>irreversible</strong>.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          <i class="bi bi-x-circle"></i> Cancel
+        </button>
+        <form id="deleteInspectionForm" method="POST" action="" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-danger">
+            <i class="bi bi-trash3-fill"></i> Delete Permanently
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if current_user.role in ['admin', 'supervisor'] %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const modal = document.getElementById('deleteInspectionModal');
+  modal.addEventListener('show.bs.modal', function (event) {
+    const btn   = event.relatedTarget;
+    const id    = btn.getAttribute('data-inspection-id');
+    const label = btn.getAttribute('data-inspection-label');
+    document.getElementById('deleteInspectionLabel').textContent = label;
+    document.getElementById('deleteInspectionForm').action = '/inspections/' + id + '/delete';
+  });
+});
+</script>
+{% endif %}
 {% endblock %}

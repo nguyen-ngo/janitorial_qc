@@ -65,7 +65,7 @@ class Inspection(db.Model):
     completed_at    = db.Column(db.DateTime)
 
     results = db.relationship('InspectionResult', backref='inspection', lazy='dynamic', cascade='all, delete-orphan')
-    issues  = db.relationship('Issue', backref='inspection', lazy='dynamic')
+    issues  = db.relationship('Issue', backref='inspection', lazy='dynamic', cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Inspection {self.id} - {self.inspection_date}>'

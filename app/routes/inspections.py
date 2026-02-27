@@ -404,7 +404,55 @@ def flag_issue(inspection_id):
 @supervisor_required
 def delete(inspection_id):
     inspection = Inspection.query.get_or_404(inspection_id)
+
+    # Capture identifiers for the log before deletion
+    insp_id       = inspection.id
+    insp_date     = inspection.inspection_date.strftime('%Y-%m-%d %H:%M')
+    facility_name = inspection.facility.name
+    template_name = inspection.template.name
+    inspector_name = inspection.inspector.username
+
+    # ── Clean up uploaded photos from disk ────────────────────────────────
+    # Collect photo paths from form data (inspection_photos) and issues
+    photo_paths = []
+    if inspection.notes:
+        try:
+            notes_data = json.loads(inspection.notes)
+            form_data  = notes_data.get('_form_data', {}) if isinstance(notes_data, dict) else {}
+            for val in form_data.values():
+                if isinstance(val, str) and val.startswith('uploads/'):
+                    photo_paths.append(val)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    for issue in inspection.issues.all():
+        if issue.photo_path:
+            photo_paths.append(issue.photo_path)
+
+    # Delete the inspection record (cascade removes results and issues)
     db.session.delete(inspection)
     db.session.commit()
-    flash('Inspection deleted.', 'success')
+
+    # Remove photo files after successful DB commit
+    for rel_path in photo_paths:
+        abs_path = os.path.join(current_app.config['UPLOAD_FOLDER'], '..', 'static', rel_path)
+        abs_path = os.path.normpath(abs_path)
+        try:
+            if os.path.isfile(abs_path):
+                os.remove(abs_path)
+        except OSError:
+            pass  # Non-fatal: log but don't block the response
+
+    current_app.logger.info(
+        'INSPECTION DELETED | id=%s | facility="%s" | template="%s" | '
+        'date=%s | inspector=%s | deleted_by=%s',
+        insp_id, facility_name, template_name,
+        insp_date, inspector_name, current_user.username
+    )
+
+    flash(
+        f'Inspection #{insp_id} ({template_name} — {facility_name}, {insp_date}) '
+        f'has been permanently deleted.',
+        'success'
+    )
     return redirect(url_for('inspections.index'))
