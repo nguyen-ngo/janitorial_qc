@@ -3,7 +3,7 @@ from flask import (Blueprint, render_template, redirect, url_for,
                    flash, request, current_app)
 from flask_login import login_required, current_user
 from app import db
-from app.models.issue import Issue
+from app.models.issue import Issue, IssueComment
 from app.models.facility import Facility, Area
 from app.models.user import User
 from app.utils.forms import IssueForm, IssueUpdateForm
@@ -84,15 +84,27 @@ def view(issue_id):
             existing = issue.result_photos or []
             issue.result_photos = existing + new_photos
 
+        # Persist a comment entry if the user wrote update notes
+        comment_body = form.comments.data.strip() if form.comments.data else ''
+        if comment_body:
+            comment = IssueComment(
+                issue_id       = issue.id,
+                user_id        = current_user.id,
+                status_at_time = issue.status,
+                body           = comment_body,
+            )
+            db.session.add(comment)
+
         db.session.commit()
         current_app.logger.info(
-            'ISSUE UPDATED | id=%s | status=%s | result_photos_added=%s | updated_by=%s',
-            issue.id, issue.status, len(new_photos), current_user.username
+            'ISSUE UPDATED | id=%s | status=%s | result_photos_added=%s | comment=%s | updated_by=%s',
+            issue.id, issue.status, len(new_photos), bool(comment_body), current_user.username
         )
         flash('Issue updated.', 'success')
         return redirect(url_for('issues.view', issue_id=issue_id))
 
-    return render_template('issues/view.html', issue=issue, form=form)
+    comments = issue.comments.order_by(IssueComment.created_at.asc()).all()
+    return render_template('issues/view.html', issue=issue, form=form, comments=comments)
 
 
 # ── Standalone create (not from an inspection) ────────────────────────────────

@@ -52,7 +52,7 @@
   {% for label, value, color, icon in [
     ('Total Inspections', total_inspections, 'primary', 'bi-clipboard-data'),
     ('Completed',         completed,         'success', 'bi-check-circle'),
-    ('Flagged',           flagged,           'danger',  'bi-flag'),
+    ('Open Issues',       flagged,           'danger',  'bi-flag'),
     ('Avg Score',         (avg_score|string + '%') if avg_score else '—', 'info', 'bi-graph-up'),
   ] %}
   <div class="col-md-3 mb-3">

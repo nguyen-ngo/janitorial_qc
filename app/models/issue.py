@@ -2,6 +2,23 @@ from app import db
 from datetime import datetime
 
 
+class IssueComment(db.Model):
+    __tablename__ = 'issue_comments'
+
+    id            = db.Column(db.Integer, primary_key=True)
+    issue_id      = db.Column(db.Integer, db.ForeignKey('issues.id'), nullable=False)
+    user_id       = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    status_at_time = db.Column(db.String(20))   # snapshot of issue status when comment was made
+    body          = db.Column(db.Text, nullable=False)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    author = db.relationship('User', foreign_keys=[user_id])
+
+    def __repr__(self):
+        return f'<IssueComment {self.id} issue={self.issue_id}>'
+
+
 class Issue(db.Model):
     __tablename__ = 'issues'
 
@@ -20,6 +37,9 @@ class Issue(db.Model):
 
     # Relationships
     assigned_user = db.relationship('User', foreign_keys=[assigned_to], backref='assigned_issues')
+    comments      = db.relationship('IssueComment', backref='issue', lazy='dynamic',
+                                    order_by='IssueComment.created_at',
+                                    cascade='all, delete-orphan')
 
     def __repr__(self):
         return f'<Issue {self.id} - {self.severity}>'

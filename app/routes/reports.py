@@ -46,7 +46,13 @@ def index():
 
     total_inspections = base.count()
     completed         = base.filter(Inspection.status == 'completed').count()
-    flagged           = base.filter(Inspection.status == 'flagged').count()
+    # "Flagged" = open or in-progress issues logged within the date range,
+    # not inspections with status='flagged' (those get completed on submit).
+    flagged           = Issue.query.filter(
+        Issue.reported_at >= start,
+        Issue.reported_at <= end,
+        Issue.status != 'resolved',
+    ).count()
     avg_score         = db.session.query(func.avg(Inspection.overall_score)).filter(
         Inspection.inspection_date >= start,
         Inspection.inspection_date <= end,

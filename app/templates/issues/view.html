@@ -69,6 +69,34 @@
         {% endif %}
       </div>
     </div>
+
+    {# ── Update History ─────────────────────────────────────────────────── #}
+    {% if comments %}
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-light">
+        <h6 class="mb-0"><i class="bi bi-clock-history"></i> Update History</h6>
+      </div>
+      <ul class="list-group list-group-flush">
+        {% for c in comments %}
+        <li class="list-group-item">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="fw-semibold text-dark">
+              <i class="bi bi-person-circle"></i> {{ c.author.username }}
+            </span>
+            <span class="d-flex align-items-center gap-2">
+              <span class="badge bg-{{ 'success' if c.status_at_time == 'resolved' else 'warning text-dark' if c.status_at_time == 'in_progress' else 'danger' }} rounded-pill" style="font-size:.65rem;">
+                {{ c.status_at_time|replace('_',' ')|title }}
+              </span>
+              <small class="text-muted">{{ c.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+            </span>
+          </div>
+          <p class="mb-0 text-secondary" style="white-space:pre-wrap; font-size:.9rem;">{{ c.body }}</p>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
   </div>
 
   <div class="col-lg-4">
