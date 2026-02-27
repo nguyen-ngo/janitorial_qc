@@ -85,7 +85,7 @@ def view(issue_id):
             issue.result_photos = existing + new_photos
 
         # Persist a comment entry if the user wrote update notes
-        comment_body = form.comments.data.strip() if form.comments.data else ''
+        comment_body = form.update_notes.data.strip() if form.update_notes.data else ''
         if comment_body:
             comment = IssueComment(
                 issue_id       = issue.id,
