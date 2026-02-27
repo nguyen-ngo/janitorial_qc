@@ -42,14 +42,43 @@
       --_gap: 8px;
       --_cell: calc((min(calc(100vw - 2rem), 900px) - 11 * 8px) / 12);
       grid-template-columns: repeat(12, var(--_cell));
-      grid-auto-rows: calc(var(--_cell) * 0.72);
+      /* Use auto rows so image/upload cells can expand to their content */
+      grid-auto-rows: auto;
       width: 100%;
+      /* Minimum row height keeps non-image rows from collapsing */
+      grid-auto-rows: minmax(calc(var(--_cell) * 0.72), auto);
     }
     .insp-body { padding: 1rem; }
+
+    /* Rating stars: scale down to fit compressed grid cells on iPad */
+    .rating-stars button { font-size: .85rem; }
+
+    /* Image cells: allow full content height, don't clip the clear button */
+    .fg-cell:has(.upload-wrap) {
+      overflow: visible;
+      height: auto;
+    }
+    /* upload-wrap must not be clipped — let it grow */
+    .upload-wrap {
+      flex: none;
+    }
+    /* upload-zone fixed compact height on iPad so it doesn't over-expand */
+    .upload-zone {
+      min-height: 44px;
+      flex: none;
+      height: 44px;
+    }
+    /* Always show the clear button text without clipping */
+    .upload-clear {
+      white-space: nowrap;
+      overflow: visible;
+    }
   }
   .fg-cell {
     overflow:hidden; display:flex; flex-direction:column; padding:.18rem .45rem;
   }
+  /* Image upload cells need overflow visible so the remove button isn't clipped */
+  .fg-cell:has(.upload-wrap) { overflow: visible; }
   .fg-cell .field-lbl {
     font-size:.74rem; font-weight:500; color:#64748b;
     margin-bottom:.2rem; display:block;
@@ -71,18 +100,34 @@
   .fg-cell .form-check-input  { margin-top:.18rem; }
   .fg-cell .form-check        { margin-bottom:.1rem; }
 
+  /* Upload zone — uses <label> wrapper so iOS Safari reliably opens file picker */
   .upload-zone {
-    border:2px dashed #cbd5e1; border-radius:6px; flex:1; min-height:0;
+    border:2px dashed #cbd5e1; border-radius:6px; flex:1; min-height:36px;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
     color:#64748b; background:#f8fafc; cursor:pointer; font-size:.74rem; gap:.2rem;
-    transition:border-color .18s, background .18s; position:relative;
+    transition:border-color .18s, background .18s;
+    -webkit-tap-highlight-color: rgba(37,99,235,.08);
   }
-  .upload-zone:hover        { border-color:#2563eb; background:#eff6ff; color:#2563eb; }
+  .upload-zone:hover,
+  .upload-zone:active       { border-color:#2563eb; background:#eff6ff; color:#2563eb; }
+  /* The actual file input is visually hidden but accessible — NOT opacity:0/absolute
+     because iOS treats that as non-interactive. Instead we use clip + size trick. */
   .upload-zone input[type=file] {
-    position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%;
+    position:absolute; width:1px; height:1px; overflow:hidden;
+    clip:rect(0,0,0,0); white-space:nowrap;
   }
-  .upload-zone i { font-size:1.1rem; }
-  .upload-zone .file-name { font-size:.7rem; color:#2563eb; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .upload-zone i { font-size:1.1rem; pointer-events:none; }
+  .upload-zone .upload-prompt { pointer-events:none; }
+  .upload-zone .file-name { font-size:.7rem; color:#2563eb; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; }
+
+  /* Fix 2: clear button for selected photo */
+  .upload-clear {
+    display:none; font-size:.68rem; padding:.1rem .35rem;
+    background:#fee2e2; border:1px solid #fca5a5; border-radius:4px;
+    color:#dc2626; cursor:pointer; margin-top:.15rem; line-height:1.4;
+  }
+  .upload-clear:hover { background:#fecaca; }
+  .upload-wrap { display:flex; flex-direction:column; flex:1; min-height:0; }
 
   .signature-pad-wrap {
     flex:1; min-height:0; border-radius:6px; border:1px solid #e2e8f0;
@@ -167,7 +212,7 @@
 
 {% block content %}
 <div class="insp-wrap mt-3">
-<form method="post" enctype="multipart/form-data" id="inspectionForm" novalidate>
+<form method="post" action="{{ url_for('inspections.execute', inspection_id=inspection.id) }}" enctype="multipart/form-data" id="inspectionForm" novalidate>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
   {# ── Header ── #}
@@ -322,17 +367,27 @@
         {# ── Image / Photo upload ── #}
         {% elif field.type == 'image' %}
           <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
-          {% if saved %}
-          <img src="{{ url_for('static', filename=saved) }}" class="photo-thumb" alt="Uploaded photo">
-          {% endif %}
-          <div class="upload-zone">
-            <input type="file" name="field_{{ fid }}" accept="image/*"
-                   onchange="showFileName(this)">
-            <i class="bi bi-cloud-upload"></i>
-            <span>Click or drag to upload</span>
-            <span class="file-name" id="fname_{{ fid }}">
-              {% if saved %}{{ saved.split('/')[-1] }}{% endif %}
-            </span>
+          <div class="upload-wrap">
+            {% if saved %}
+            <img src="{{ url_for('static', filename=saved) }}" class="photo-thumb" id="thumb_{{ fid }}" alt="Uploaded photo">
+            {% else %}
+            <img class="photo-thumb" id="thumb_{{ fid }}" alt="Preview" style="display:none; max-height:60px; border-radius:4px; margin-bottom:.25rem;">
+            {% endif %}
+            {# <label> wrapper is required for reliable iOS file picker activation #}
+            <label class="upload-zone" for="field_{{ fid }}" id="zone_{{ fid }}">
+              <input type="file" name="field_{{ fid }}" id="field_{{ fid }}" accept="image/*"
+                     onchange="showFileName(this)">
+              <i class="bi bi-cloud-upload"></i>
+              <span class="upload-prompt">Tap to take / choose photo</span>
+              <span class="file-name" id="fname_{{ fid }}">
+                {% if saved %}{{ saved.split('/')[-1] }}{% endif %}
+              </span>
+            </label>
+            <button type="button" class="upload-clear" id="clear_{{ fid }}"
+                    onclick="clearUpload('{{ fid }}')"
+                    {% if saved %}style="display:block"{% endif %}>
+              <i class="bi bi-x-circle"></i> Remove photo
+            </button>
           </div>
           {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
 
@@ -398,8 +453,7 @@
       <button type="submit" name="action" value="draft" class="btn btn-sm btn-outline-light">
         <i class="bi bi-floppy"></i> Save Draft
       </button>
-      <button type="submit" name="action" value="submit" class="btn btn-success"
-              onclick="collectSignatures(); return confirmSubmit();">
+      <button type="submit" name="action" value="submit" class="btn btn-success">
         <i class="bi bi-check-circle-fill"></i> Submit Inspection
       </button>
     </div>
@@ -423,13 +477,53 @@ function setRating(btn) {
   });
 }
 
-// ── File upload label ─────────────────────────────────────────────────────────
+// ── File upload: show filename, preview thumbnail, enable clear button ──────────
 function showFileName(input) {
-  const wrap  = input.closest('.upload-zone');
-  const label = wrap ? wrap.querySelector('.file-name') : null;
-  if (label && input.files.length) {
-    label.textContent = input.files[0].name;
+  const fid   = input.id.replace('field_', '');
+  const label = document.getElementById('fname_' + fid);
+  const thumb = document.getElementById('thumb_' + fid);
+  const clear = document.getElementById('clear_' + fid);
+
+  if (input.files && input.files.length > 0) {
+    const file = input.files[0];
+
+    // Show filename
+    if (label) label.textContent = file.name;
+
+    // Show image preview via FileReader
+    if (thumb && file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = e => {
+        thumb.src = e.target.result;
+        thumb.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // Show the clear button
+    if (clear) clear.style.display = 'block';
   }
+}
+
+// ── Clear a photo upload field ────────────────────────────────────────────────
+// On iOS, input.files is a read-only FileList — setting input.value='' does NOT
+// clear it. The only reliable cross-browser reset is to replace the input element.
+function clearUpload(fid) {
+  const input = document.getElementById('field_' + fid);
+  const label = document.getElementById('fname_' + fid);
+  const thumb = document.getElementById('thumb_' + fid);
+  const clear = document.getElementById('clear_' + fid);
+
+  if (input) {
+    // Replace the file input with a fresh clone — the only reliable iOS reset
+    const newInput = input.cloneNode(false);  // false = no children
+    newInput.value = '';
+    newInput.addEventListener('change', function() { showFileName(this); });
+    input.parentNode.replaceChild(newInput, input);
+  }
+  if (label) label.textContent = '';
+  if (thumb) { thumb.src = ''; thumb.style.display = 'none'; }
+  if (clear) clear.style.display = 'none';
 }
 
 // ── Signature pads ────────────────────────────────────────────────────────────
@@ -492,11 +586,6 @@ function collectSignatures() {
   });
 }
 
-// ── Submit confirmation ───────────────────────────────────────────────────────
-function confirmSubmit() {
-  return confirm('Submit this inspection? This action cannot be undone.');
-}
-
 // ── Client-side image compression ─────────────────────────────────────────────
 // Compresses photos via Canvas before upload to prevent 413 errors.
 // Target: ≤ 1MB per image at 85% JPEG quality, max 1920px on longest side.
@@ -544,54 +633,76 @@ function compressImageFile(file) {
   });
 }
 
-// Intercept form submission — compress all image fields before sending
+// ── Form submission: compress images then submit natively ────────────────────
+// Using native form POST (not fetch) avoids all iOS Safari redirect/fetch quirks.
+// Images are compressed via Canvas → DataTransfer → file input replacement before submit.
+
+// Track which button was clicked (submit vs draft)
+let _submittingAction = 'submit';
+document.querySelectorAll('#inspectionForm button[type="submit"]').forEach(btn => {
+  btn.addEventListener('click', function() {
+    _submittingAction = this.value || 'submit';
+  }, true);  // capture phase — fires before submit event
+});
+
 document.getElementById('inspectionForm').addEventListener('submit', async function(e) {
-  const fileInputs = this.querySelectorAll('input[type="file"]');
-  if (!fileInputs.length) return; // nothing to compress
-
-  // Only intercept if there are files to compress
-  const hasFiles = Array.from(fileInputs).some(inp => inp.files && inp.files.length > 0);
-  if (!hasFiles) return;
-
   e.preventDefault();
 
-  const btn = this.querySelector('button[type="submit"]');
-  const origText = btn ? btn.innerHTML : '';
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Compressing photos…';
+  // Confirm before final submission (not for drafts)
+  if (_submittingAction === 'submit') {
+    if (!confirm('Submit this inspection? This action cannot be undone.')) return;
   }
 
+  collectSignatures();  // Flush signature canvases to hidden inputs
+
+  const form      = this;
+  const fileInputs = Array.from(form.querySelectorAll('input[type="file"]'))
+                          .filter(inp => inp.files && inp.files.length > 0);
+
+  // Show spinner on the active button
+  const activeBtn = Array.from(form.querySelectorAll('button[type="submit"]'))
+                         .find(b => b.value === _submittingAction)
+                    || form.querySelector('button[type="submit"]');
+  const origHTML = activeBtn ? activeBtn.innerHTML : '';
+  form.querySelectorAll('button[type="submit"]').forEach(b => b.disabled = true);
+  if (activeBtn) {
+    activeBtn.innerHTML = fileInputs.length
+      ? '<span class="spinner-border spinner-border-sm me-1"></span> Uploading…'
+      : '<span class="spinner-border spinner-border-sm me-1"></span> Saving…';
+  }
+
+  // Write the action value into a hidden field so the native POST includes it
+  let actionInput = form.querySelector('input[name="action"]');
+  if (!actionInput) {
+    actionInput = document.createElement('input');
+    actionInput.type  = 'hidden';
+    actionInput.name  = 'action';
+    form.appendChild(actionInput);
+  }
+  actionInput.value = _submittingAction;
+
   try {
-    // Build a FormData object with compressed images
-    const formData = new FormData(this);
-
+    // Compress images and replace file input contents via DataTransfer
     for (const input of fileInputs) {
-      if (!input.files || !input.files.length) continue;
       const compressed = await compressImageFile(input.files[0]);
-      formData.set(input.name, compressed, compressed.name);
+      // DataTransfer lets us programmatically set input.files (iOS 15.4+, all modern browsers)
+      if (typeof DataTransfer !== 'undefined') {
+        try {
+          const dt = new DataTransfer();
+          dt.items.add(compressed);
+          input.files = dt.files;
+        } catch (_) {
+          // DataTransfer.items not supported — submit original file uncompressed
+        }
+      }
     }
-
-    // Submit via fetch with the compressed FormData
-    const response = await fetch(this.action || window.location.href, {
-      method: 'POST',
-      body: formData,
-      credentials: 'same-origin',
-    });
-
-    if (response.redirected) {
-      window.location.href = response.url;
-    } else if (response.ok) {
-      window.location.reload();
-    } else {
-      // Surface server error (e.g. still-too-large after compression)
-      if (btn) { btn.disabled = false; btn.innerHTML = origText; }
-      alert('Submission failed (HTTP ' + response.status + '). Please try again or remove some photos.');
-    }
+    // Native form submit — browser handles multipart encoding and follows the redirect
+    form.submit();
   } catch (err) {
-    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
-    console.error('Photo compression error:', err);
-    alert('An error occurred while processing photos. Please try again.');
+    form.querySelectorAll('button[type="submit"]').forEach(b => b.disabled = false);
+    if (activeBtn) activeBtn.innerHTML = origHTML;
+    console.error('Inspection submit error:', err);
+    alert('An error occurred. Please try again.');
   }
 });
 </script>

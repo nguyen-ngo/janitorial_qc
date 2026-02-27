@@ -39,12 +39,18 @@ def _save_photo(file_obj, subfolder='inspection_photos'):
     return f"uploads/{subfolder}/{filename}"
 
 
-def _collect_form_responses(form_fields):
+def _collect_form_responses(form_fields, existing_responses=None):
     """
     Walk the submitted form data and collect responses keyed by field ID.
     Returns a dict: { field_id: value_or_list_or_path }
     Photo uploads are saved to disk; their path is stored as the value.
+
+    existing_responses: previously saved form data (from inspection.notes).
+    Used to preserve photo paths when no new file is uploaded on resubmit.
     """
+    if existing_responses is None:
+        existing_responses = {}
+
     responses = {}
     for field in form_fields:
         fid   = field['id']
@@ -64,7 +70,18 @@ def _collect_form_responses(form_fields):
         elif ftype == 'image':
             photo_file = request.files.get(key)
             path = _save_photo(photo_file, subfolder='inspection_photos')
-            responses[fid] = path or ''
+            if path:
+                # New file uploaded — use the new path
+                responses[fid] = path
+            else:
+                # No new file — preserve the previously saved photo path.
+                # JSON keys are always strings; try both str and original type.
+                existing_path = (
+                    existing_responses.get(str(fid))
+                    or existing_responses.get(fid)
+                    or ''
+                )
+                responses[fid] = existing_path
 
         elif ftype == 'table':
             cols = field.get('col_headers') or ['Column 1']
@@ -261,8 +278,10 @@ def execute(inspection_id):
     if request.method == 'POST':
         action = request.form.get('action', 'submit')
 
-        # Collect all field responses from the submitted form
-        responses = _collect_form_responses(form_fields)
+        # Collect all field responses from the submitted form.
+        # Pass saved_responses so existing photo paths are preserved
+        # when no new file is selected on this submission.
+        responses = _collect_form_responses(form_fields, saved_responses)
 
         if action == 'submit':
             # Validate required fields

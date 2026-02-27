@@ -235,18 +235,26 @@
   }
 }
 
-/* ── 12. Rating stars — ensure tap targets ── */
+/* ── 12. Rating stars — tap targets sized to grid cell, not oversized ── */
 @media (pointer: coarse) {
+  /* Inside the inspection form grid, stars must stay compact to fit their cell.
+     The grid cell height is ~50px; 1.6rem stars at 44px each would overflow. */
   .rating-stars button {
-    font-size: 1.6rem !important;
-    padding: 0.25rem !important;
-    min-height: 44px !important;
-    min-width: 44px !important;
+    font-size: 1rem;       /* fits within grid cell rows */
+    padding: 0.15rem;
+    min-height: unset;     /* do not enforce 44px — cell height controls this */
+    min-width: unset;
   }
 
-  /* Upload zone — larger tap area */
+  /* Outside the grid (e.g. standalone forms), keep comfortable tap targets */
+  :not(.form-grid) .rating-stars button {
+    font-size: 1.4rem;
+    padding: 0.2rem;
+  }
+
+  /* Upload zone — compact inside grid, comfortable outside */
   .upload-zone {
-    min-height: 80px !important;
+    min-height: 44px;      /* reduced from 80px — fits grid cell */
   }
 
   /* Signature pad — taller for finger drawing */
