@@ -53,32 +53,12 @@
     /* Rating stars: scale down to fit compressed grid cells on iPad */
     .rating-stars button { font-size: .85rem; }
 
-    /* Image cells: allow full content height, don't clip the clear button */
-    .fg-cell:has(.upload-wrap) {
-      overflow: visible;
-      height: auto;
-    }
-    /* upload-wrap must not be clipped — let it grow */
-    .upload-wrap {
-      flex: none;
-    }
-    /* upload-zone fixed compact height on iPad so it doesn't over-expand */
-    .upload-zone {
-      min-height: 44px;
-      flex: none;
-      height: 44px;
-    }
-    /* Always show the clear button text without clipping */
-    .upload-clear {
-      white-space: nowrap;
-      overflow: visible;
-    }
+    /* Image upload cells: don't clip the chosen-file row */
+    .upload-zone { overflow: visible; }
   }
   .fg-cell {
     overflow:hidden; display:flex; flex-direction:column; padding:.18rem .45rem;
   }
-  /* Image upload cells need overflow visible so the remove button isn't clipped */
-  .fg-cell:has(.upload-wrap) { overflow: visible; }
   .fg-cell .field-lbl {
     font-size:.74rem; font-weight:500; color:#64748b;
     margin-bottom:.2rem; display:block;
@@ -100,34 +80,44 @@
   .fg-cell .form-check-input  { margin-top:.18rem; }
   .fg-cell .form-check        { margin-bottom:.1rem; }
 
-  /* Upload zone — uses <label> wrapper so iOS Safari reliably opens file picker */
+  /* Upload zone — <label> wrapper so iOS Safari reliably opens the file picker */
   .upload-zone {
-    border:2px dashed #cbd5e1; border-radius:6px; flex:1; min-height:36px;
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
-    color:#64748b; background:#f8fafc; cursor:pointer; font-size:.74rem; gap:.2rem;
+    border:2px dashed #cbd5e1; border-radius:6px; flex:1; min-height:0;
+    display:flex; flex-direction:row; align-items:center; justify-content:center;
+    color:#64748b; background:#f8fafc; cursor:pointer; font-size:.74rem; gap:.35rem;
+    padding:.2rem .4rem;
     transition:border-color .18s, background .18s;
     -webkit-tap-highlight-color: rgba(37,99,235,.08);
+    position:relative; overflow:hidden;
   }
   .upload-zone:hover,
-  .upload-zone:active       { border-color:#2563eb; background:#eff6ff; color:#2563eb; }
-  /* The actual file input is visually hidden but accessible — NOT opacity:0/absolute
-     because iOS treats that as non-interactive. Instead we use clip + size trick. */
+  .upload-zone:active { border-color:#2563eb; background:#eff6ff; color:#2563eb; }
+  /* Hidden file input — clip trick keeps it accessible without the opacity:0/abs iOS bug */
   .upload-zone input[type=file] {
     position:absolute; width:1px; height:1px; overflow:hidden;
     clip:rect(0,0,0,0); white-space:nowrap;
   }
-  .upload-zone i { font-size:1.1rem; pointer-events:none; }
-  .upload-zone .upload-prompt { pointer-events:none; }
-  .upload-zone .file-name { font-size:.7rem; color:#2563eb; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; }
-
-  /* Fix 2: clear button for selected photo */
+  .upload-zone i { font-size:.95rem; flex-shrink:0; pointer-events:none; }
+  /* Left side: icon + text stack */
+  .upload-main { display:flex; flex-direction:column; align-items:center; flex:1; pointer-events:none; gap:.1rem; }
+  .upload-prompt { font-size:.7rem; pointer-events:none; }
+  /* Right side: filename chip + remove button, shown only when a file is selected */
+  .upload-chosen {
+    display:none; flex-direction:column; align-items:flex-end; gap:.15rem;
+    max-width:45%; flex-shrink:0;
+  }
+  .upload-chosen.has-file { display:flex; }
+  .upload-fname {
+    font-size:.65rem; color:#2563eb; font-weight:500;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    max-width:100%; pointer-events:none;
+  }
   .upload-clear {
-    display:none; font-size:.68rem; padding:.1rem .35rem;
-    background:#fee2e2; border:1px solid #fca5a5; border-radius:4px;
-    color:#dc2626; cursor:pointer; margin-top:.15rem; line-height:1.4;
+    font-size:.62rem; padding:.08rem .3rem; line-height:1.4;
+    background:#fee2e2; border:1px solid #fca5a5; border-radius:3px;
+    color:#dc2626; cursor:pointer; pointer-events:all; white-space:nowrap;
   }
   .upload-clear:hover { background:#fecaca; }
-  .upload-wrap { display:flex; flex-direction:column; flex:1; min-height:0; }
 
   .signature-pad-wrap {
     flex:1; min-height:0; border-radius:6px; border:1px solid #e2e8f0;
@@ -164,9 +154,6 @@
   .tbl-field td { border:1px solid #e2e8f0; padding:.15rem .25rem; }
   .tbl-input { width:100%; border:none; outline:none; font-size:.8rem; padding:.1rem .2rem; background:transparent; }
   .tbl-input:focus { background:#eff6ff; }
-
-  /* existing photo thumbnail */
-  .photo-thumb { max-height:60px; border-radius:4px; margin-bottom:.25rem; }
 
   /* sticky footer bar */
   .insp-footer {
@@ -367,28 +354,23 @@
         {# ── Image / Photo upload ── #}
         {% elif field.type == 'image' %}
           <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
-          <div class="upload-wrap">
-            {% if saved %}
-            <img src="{{ url_for('static', filename=saved) }}" class="photo-thumb" id="thumb_{{ fid }}" alt="Uploaded photo">
-            {% else %}
-            <img class="photo-thumb" id="thumb_{{ fid }}" alt="Preview" style="display:none; max-height:60px; border-radius:4px; margin-bottom:.25rem;">
-            {% endif %}
-            {# <label> wrapper is required for reliable iOS file picker activation #}
-            <label class="upload-zone" for="field_{{ fid }}" id="zone_{{ fid }}">
-              <input type="file" name="field_{{ fid }}" id="field_{{ fid }}" accept="image/*"
-                     onchange="showFileName(this)">
+          {# Single <label> element: tap anywhere to pick a photo.
+             Filename + remove button appear on the right when a file is chosen. #}
+          <label class="upload-zone" for="field_{{ fid }}" id="zone_{{ fid }}">
+            <input type="file" name="field_{{ fid }}" id="field_{{ fid }}" accept="image/*"
+                   onchange="showFileName(this)">
+            <div class="upload-main">
               <i class="bi bi-cloud-upload"></i>
               <span class="upload-prompt">Tap to take / choose photo</span>
-              <span class="file-name" id="fname_{{ fid }}">
-                {% if saved %}{{ saved.split('/')[-1] }}{% endif %}
-              </span>
-            </label>
-            <button type="button" class="upload-clear" id="clear_{{ fid }}"
-                    onclick="clearUpload('{{ fid }}')"
-                    {% if saved %}style="display:block"{% endif %}>
-              <i class="bi bi-x-circle"></i> Remove photo
-            </button>
-          </div>
+            </div>
+            <div class="upload-chosen{% if saved %} has-file{% endif %}" id="chosen_{{ fid }}">
+              <span class="upload-fname" id="fname_{{ fid }}">{% if saved %}{{ saved.split('/')[-1] }}{% endif %}</span>
+              <button type="button" class="upload-clear" id="clear_{{ fid }}"
+                      onclick="event.preventDefault(); event.stopPropagation(); clearUpload('{{ fid }}')">
+                <i class="bi bi-x-circle"></i> Remove
+              </button>
+            </div>
+          </label>
           {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
 
         {# ── Signature ── #}
@@ -477,53 +459,33 @@ function setRating(btn) {
   });
 }
 
-// ── File upload: show filename, preview thumbnail, enable clear button ──────────
+// ── File upload: show filename + reveal the chosen panel ────────────────────
 function showFileName(input) {
-  const fid   = input.id.replace('field_', '');
-  const label = document.getElementById('fname_' + fid);
-  const thumb = document.getElementById('thumb_' + fid);
-  const clear = document.getElementById('clear_' + fid);
+  const fid    = input.id.replace('field_', '');
+  const fname  = document.getElementById('fname_'  + fid);
+  const chosen = document.getElementById('chosen_' + fid);
 
   if (input.files && input.files.length > 0) {
-    const file = input.files[0];
-
-    // Show filename
-    if (label) label.textContent = file.name;
-
-    // Show image preview via FileReader
-    if (thumb && file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = e => {
-        thumb.src = e.target.result;
-        thumb.style.display = 'block';
-      };
-      reader.readAsDataURL(file);
-    }
-
-    // Show the clear button
-    if (clear) clear.style.display = 'block';
+    if (fname)  fname.textContent = input.files[0].name;
+    if (chosen) chosen.classList.add('has-file');
   }
 }
 
 // ── Clear a photo upload field ────────────────────────────────────────────────
-// On iOS, input.files is a read-only FileList — setting input.value='' does NOT
-// clear it. The only reliable cross-browser reset is to replace the input element.
+// iOS: input.files is read-only — replace the element to truly reset it.
 function clearUpload(fid) {
-  const input = document.getElementById('field_' + fid);
-  const label = document.getElementById('fname_' + fid);
-  const thumb = document.getElementById('thumb_' + fid);
-  const clear = document.getElementById('clear_' + fid);
+  const input  = document.getElementById('field_'  + fid);
+  const fname  = document.getElementById('fname_'  + fid);
+  const chosen = document.getElementById('chosen_' + fid);
 
   if (input) {
-    // Replace the file input with a fresh clone — the only reliable iOS reset
-    const newInput = input.cloneNode(false);  // false = no children
+    const newInput = input.cloneNode(false);
     newInput.value = '';
     newInput.addEventListener('change', function() { showFileName(this); });
     input.parentNode.replaceChild(newInput, input);
   }
-  if (label) label.textContent = '';
-  if (thumb) { thumb.src = ''; thumb.style.display = 'none'; }
-  if (clear) clear.style.display = 'none';
+  if (fname)  fname.textContent = '';
+  if (chosen) chosen.classList.remove('has-file');
 }
 
 // ── Signature pads ────────────────────────────────────────────────────────────
