@@ -71,7 +71,15 @@
               {% if issue.assigned_user %}{{ issue.assigned_user.username }}
               {% else %}<span class="text-muted">—</span>{% endif %}
             </td>
-            <td><a href="{{ url_for('issues.view', issue_id=issue.id) }}" class="btn btn-sm btn-outline-secondary">View</a></td>
+            <td>
+              <a href="{{ url_for('issues.view', issue_id=issue.id) }}" class="btn btn-sm btn-outline-secondary">
+                {% if current_user.role in ['admin','supervisor'] or issue.assigned_to == current_user.id %}
+                  <i class="bi bi-pencil"></i> Edit
+                {% else %}
+                  <i class="bi bi-eye"></i> View
+                {% endif %}
+              </a>
+            </td>
           </tr>
           {% endfor %}
         </tbody>

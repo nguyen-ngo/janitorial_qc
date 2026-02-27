@@ -15,6 +15,8 @@ class Issue(db.Model):
     assigned_to   = db.Column(db.Integer, db.ForeignKey('users.id'))
     reported_at   = db.Column(db.DateTime, default=datetime.utcnow)
     resolved_at   = db.Column(db.DateTime)
+    result_notes  = db.Column(db.Text)
+    result_photos = db.Column(db.JSON)   # list of relative paths e.g. ["uploads/issue_photos/abc.jpg"]
 
     # Relationships
     assigned_user = db.relationship('User', foreign_keys=[assigned_to], backref='assigned_issues')

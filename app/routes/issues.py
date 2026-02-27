@@ -1,6 +1,6 @@
 from datetime import datetime
 from flask import (Blueprint, render_template, redirect, url_for,
-                   flash, request)
+                   flash, request, current_app)
 from flask_login import login_required, current_user
 from app import db
 from app.models.issue import Issue
@@ -21,11 +21,9 @@ def index():
 
     q = Issue.query.order_by(Issue.reported_at.desc())
 
-    # Inspectors only see issues they reported (linked to their inspections)
+    # Inspectors only see issues assigned to them
     if current_user.role == 'inspector':
-        from app.models.inspection import Inspection
-        q = q.join(Inspection, Issue.inspection_id == Inspection.id)\
-             .filter(Inspection.inspector_id == current_user.id)
+        q = q.filter(Issue.assigned_to == current_user.id)
 
     severity_filter = request.args.get('severity', '')
     status_filter   = request.args.get('status', '')
@@ -48,6 +46,12 @@ def index():
 @login_required
 def view(issue_id):
     issue = Issue.query.get_or_404(issue_id)
+
+    # Access control: inspectors may only view/edit issues assigned to them
+    if current_user.role == 'inspector' and issue.assigned_to != current_user.id:
+        flash('Access denied. You can only view issues assigned to you.', 'danger')
+        return redirect(url_for('issues.index'))
+
     form  = IssueUpdateForm(obj=issue)
 
     staff = User.query.filter(User.role.in_(['supervisor','inspector'])).order_by(User.username).all()
@@ -55,15 +59,36 @@ def view(issue_id):
     form.status.data = form.status.data or issue.status
 
     if form.validate_on_submit():
-        issue.status      = form.status.data
-        issue.assigned_to = form.assigned_to.data or None
+        issue.status = form.status.data
+
+        # Only admin/supervisor can reassign; inspectors can only update status
+        if current_user.role in ['admin', 'supervisor']:
+            issue.assigned_to = form.assigned_to.data or None
 
         if form.status.data == 'resolved' and not issue.resolved_at:
             issue.resolved_at = datetime.utcnow()
         elif form.status.data != 'resolved':
             issue.resolved_at = None
 
+        # Save result notes (overwrite with latest value)
+        issue.result_notes = form.result_notes.data or None
+
+        # Append any newly uploaded result photos
+        from app.routes.inspections import _save_photo
+        new_photos = []
+        for file_obj in request.files.getlist('result_photos'):
+            path = _save_photo(file_obj, subfolder='issue_result_photos')
+            if path:
+                new_photos.append(path)
+        if new_photos:
+            existing = issue.result_photos or []
+            issue.result_photos = existing + new_photos
+
         db.session.commit()
+        current_app.logger.info(
+            'ISSUE UPDATED | id=%s | status=%s | result_photos_added=%s | updated_by=%s',
+            issue.id, issue.status, len(new_photos), current_user.username
+        )
         flash('Issue updated.', 'success')
         return redirect(url_for('issues.view', issue_id=issue_id))
 

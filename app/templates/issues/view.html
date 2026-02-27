@@ -48,28 +48,67 @@
           <img src="{{ url_for('static', filename=issue.photo_path) }}" class="img-fluid rounded" style="max-height:300px;">
         </a>
         {% endif %}
+
+        {% if issue.result_notes or issue.result_photos %}
+        <hr>
+        <h6><i class="bi bi-clipboard2-check text-success"></i> Resolution Details</h6>
+        {% if issue.result_notes %}
+        <p class="mb-2" style="white-space:pre-wrap;">{{ issue.result_notes }}</p>
+        {% endif %}
+        {% if issue.result_photos %}
+        <div class="d-flex flex-wrap gap-2 mt-2">
+          {% for photo in issue.result_photos %}
+          <a href="{{ url_for('static', filename=photo) }}" target="_blank">
+            <img src="{{ url_for('static', filename=photo) }}"
+                 class="rounded border" style="max-height:120px; max-width:160px; object-fit:cover;"
+                 alt="Result photo">
+          </a>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% endif %}
       </div>
     </div>
   </div>
 
   <div class="col-lg-4">
-    {% if current_user.role in ['admin','supervisor'] %}
+    {% set can_edit = current_user.role in ['admin','supervisor'] or issue.assigned_to == current_user.id %}
+    {% if can_edit %}
     <div class="card shadow-sm">
       <div class="card-header bg-light"><h6 class="mb-0">Update Issue</h6></div>
       <div class="card-body">
-        <form method="post">
+        <form method="post" enctype="multipart/form-data">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="mb-3">
             {{ form.status.label(class="form-label fw-semibold") }}
             {{ form.status(class="form-select") }}
           </div>
+          {% if current_user.role in ['admin','supervisor'] %}
           <div class="mb-3">
             {{ form.assigned_to.label(class="form-label fw-semibold") }}
             {{ form.assigned_to(class="form-select") }}
           </div>
+          {% endif %}
           <div class="mb-3">
             {{ form.comments.label(class="form-label fw-semibold") }}
             {{ form.comments(class="form-control", rows=3, placeholder="Optional update notes…") }}
+          </div>
+          <div class="mb-3">
+            {{ form.result_notes.label(class="form-label fw-semibold") }}
+            {{ form.result_notes(class="form-control", rows=3,
+               placeholder="Describe what was done to resolve this issue…",
+               value=issue.result_notes or '') }}
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Result Photos</label>
+            <input type="file" name="result_photos" id="result_photos"
+                   class="form-control" accept="image/*" multiple>
+            <div class="form-text">Attach one or more photos showing the resolution.</div>
+            {% if issue.result_photos %}
+            <div class="mt-2">
+              <small class="text-muted">{{ issue.result_photos|length }} photo(s) already uploaded</small>
+            </div>
+            {% endif %}
           </div>
           <button type="submit" class="btn btn-primary w-100">Save Update</button>
         </form>

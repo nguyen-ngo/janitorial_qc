@@ -123,8 +123,13 @@ class IssueForm(FlaskForm):
 
 
 class IssueUpdateForm(FlaskForm):
-    status      = SelectField('Status', choices=[
+    status       = SelectField('Status', choices=[
         ('open','Open'), ('in_progress','In Progress'), ('resolved','Resolved'),
     ], validators=[DataRequired()])
-    assigned_to = SelectField('Assign To', coerce=int, validators=[Optional()])
-    comments    = TextAreaField('Update Notes', validators=[Optional(), Length(max=1000)])
+    assigned_to  = SelectField('Assign To', coerce=int, validators=[Optional()])
+    comments     = TextAreaField('Update Notes', validators=[Optional(), Length(max=1000)])
+    result_notes = TextAreaField('Result Notes', validators=[Optional(), Length(max=2000)])
+    result_photos = FileField('Result Photos', validators=[
+        Optional(),
+        FileAllowed(['jpg','jpeg','png','gif'], 'Images only.')
+    ])
