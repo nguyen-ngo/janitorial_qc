@@ -1,0 +1,309 @@
+/* =============================================================
+   iPad & iPad mini Responsive Overrides
+   Target breakpoints:
+     iPad mini  : 744px  × 1133px  (portrait) / 1133px × 744px  (landscape)
+     iPad (10th): 820px  × 1180px  (portrait) / 1180px × 820px  (landscape)
+     iPad Air   : 820px  × 1180px  (portrait)
+     iPad Pro 11: 834px  × 1194px  (portrait)
+   All covered by max-width: 1194px + touch-specific rules.
+   ============================================================= */
+
+/* ── 1. Global touch-friendly baseline ── */
+@media (pointer: coarse), (max-width: 1194px) {
+  /* Minimum 44px touch targets on interactive elements */
+  .btn,
+  .nav-link,
+  .dropdown-item,
+  input[type="checkbox"],
+  input[type="radio"],
+  .form-check-input {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* Slightly larger form controls for finger input */
+  .form-control,
+  .form-select {
+    min-height: 44px;
+    font-size: 1rem;
+  }
+
+  /* Prevent double-tap zoom on buttons */
+  button,
+  a {
+    touch-action: manipulation;
+  }
+}
+
+/* ── 2. Navbar — collapse at iPad widths ── */
+@media (max-width: 1024px) {
+  .navbar-collapse .navbar-nav .nav-link {
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+  }
+
+  .navbar-collapse {
+    padding-bottom: 0.5rem;
+  }
+}
+
+/* ── 3. Container padding on iPad ── */
+@media (max-width: 1024px) {
+  .container-fluid {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+/* ── 4. Dashboard stat cards — 2-up on iPad mini portrait ── */
+@media (max-width: 820px) {
+  .col-md-3 {
+    flex: 0 0 50%;
+    max-width: 50%;
+  }
+}
+
+/* ── 5. Form grid — THE critical fix ──
+   The form editor/execute/preview use a fixed 12-column grid where
+   each column is 72px wide (total ≈ 920px + gaps).
+   On iPads this overflows horizontally.
+   Solution: scale the grid using CSS custom properties + clamp()
+   so it always fits within the viewport while maintaining proportions.
+   ─────────────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  /* Override the fixed cell width with a fluid value */
+  :root {
+    --grid-cols: 12;
+    --grid-gap: 8px;
+    /* Each cell = (available_width - 11 gaps) / 12 columns */
+    --cell-w-fluid: calc((min(96vw, 900px) - 11 * var(--grid-gap)) / var(--grid-cols));
+  }
+
+  /* Execute & preview .form-grid */
+  .form-grid {
+    grid-template-columns: repeat(12, var(--cell-w-fluid)) !important;
+    width: 100% !important;          /* remove max-content so it fills container */
+    overflow-x: visible !important;
+  }
+
+  /* Row height scales proportionally: original ratio was 52/72 ≈ 0.72 */
+  .form-grid {
+    grid-auto-rows: calc(var(--cell-w-fluid) * 0.72) !important;
+  }
+
+  /* Cells: let font scale with viewport */
+  .fg-cell .field-lbl {
+    font-size: clamp(0.6rem, 1.2vw, 0.74rem) !important;
+  }
+
+  .fg-cell .form-control,
+  .fg-cell .form-select {
+    font-size: clamp(0.65rem, 1.3vw, 0.76rem) !important;
+    min-height: unset; /* override the 44px rule inside grids — cells are constrained */
+    padding: 0.15rem 0.35rem !important;
+  }
+
+  /* insp-body / preview-body scroll container */
+  .insp-body,
+  .preview-body {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 1rem !important;
+  }
+}
+
+/* ── 6. Form editor layout — sidebar panels ── */
+@media (max-width: 1024px) {
+  /* Editor uses a 3-column CSS grid: sidebar | canvas | properties.
+     On iPad: stack canvas below sidebars, or let sidebars collapse. */
+  .editor-layout {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: auto 1fr auto !important;
+  }
+
+  .editor-sidebar-left,
+  .editor-sidebar-right {
+    max-height: 220px;
+    overflow-y: auto;
+  }
+}
+
+/* ── 7. Tables ── */
+@media (max-width: 1024px) {
+  /* Ensure all tables have horizontal scroll */
+  .table-responsive {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Tables not wrapped in .table-responsive */
+  table:not(.tbl-field) {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+  }
+
+  /* Table action buttons — stack vertically if needed */
+  td .btn + form,
+  td .btn + .btn {
+    margin-top: 4px;
+    display: block;
+  }
+}
+
+/* ── 8. Cards & layout — improve spacing ── */
+@media (max-width: 820px) {
+  /* Full-width cards on narrow iPad portrait */
+  .col-md-6[class*="offset-"],
+  .col-md-8[class*="offset-"] {
+    margin-left: 0 !important;
+    max-width: 100% !important;
+    flex: 0 0 100% !important;
+  }
+
+  .card-body {
+    padding: 1rem;
+  }
+
+  /* Page header action buttons — stack on small iPads */
+  .col-md-4.text-end.d-flex {
+    flex-wrap: wrap;
+    gap: 0.5rem !important;
+    justify-content: flex-start !important;
+  }
+}
+
+/* ── 9. Inspection execute — header & footer ── */
+@media (max-width: 1024px) {
+  .insp-wrap {
+    padding: 0 0.5rem 5rem !important;
+  }
+
+  .insp-header {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 0.75rem !important;
+    padding: 1rem !important;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .insp-header .d-flex.gap-2 {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .insp-footer {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
+    padding: 0.75rem 1rem !important;
+  }
+
+  .insp-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Flag Issue button — full width on small screens */
+  .insp-header .btn {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+/* ── 10. Preview header ── */
+@media (max-width: 1024px) {
+  .preview-wrap {
+    padding: 0.5rem 0.5rem 3rem !important;
+    margin-top: 0.5rem !important;
+  }
+
+  .preview-header {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 0.75rem !important;
+    padding: 1rem !important;
+  }
+}
+
+/* ── 11. Modals — full width on iPad mini ── */
+@media (max-width: 768px) {
+  .modal-dialog {
+    margin: 0.5rem;
+    max-width: calc(100vw - 1rem);
+  }
+}
+
+/* ── 12. Rating stars — ensure tap targets ── */
+@media (pointer: coarse) {
+  .rating-stars button {
+    font-size: 1.6rem !important;
+    padding: 0.25rem !important;
+    min-height: 44px !important;
+    min-width: 44px !important;
+  }
+
+  /* Upload zone — larger tap area */
+  .upload-zone {
+    min-height: 80px !important;
+  }
+
+  /* Signature pad — taller for finger drawing */
+  .signature-pad-wrap {
+    min-height: 120px !important;
+  }
+
+  /* Sig clear button — larger touch target */
+  .sig-clear {
+    padding: 0.3rem 0.6rem !important;
+    font-size: 0.75rem !important;
+  }
+}
+
+/* ── 13. Facility view action buttons row ── */
+@media (max-width: 1024px) {
+  .col-md-4.text-end {
+    text-align: left !important;
+    margin-top: 0.75rem;
+  }
+}
+
+/* ── 14. Reports — filter bar ── */
+@media (max-width: 820px) {
+  .row.g-3 .col-md-3,
+  .row.g-3 .col-md-4,
+  .row.g-3 .col-md-2 {
+    flex: 0 0 50%;
+    max-width: 50%;
+  }
+}
+
+/* ── 15. Checklist items in legacy inspect view ── */
+@media (max-width: 1024px) {
+  .checklist-item {
+    padding: 0.75rem !important;
+  }
+
+  .rating-option {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* ── 16. Prevent subpixel rendering issues on Retina displays ── */
+@media (-webkit-min-device-pixel-ratio: 2) {
+  .card,
+  .modal-content {
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+  }
+}
+
+/* ── 17. Safe-area insets (iPad with home indicator) ── */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .insp-footer,
+  .container-fluid {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+}

@@ -37,6 +37,7 @@
     border-radius: 0 0 12px 12px;
     padding: 1.75rem;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* 12-col grid — same columns as editor, rows shrink to content in preview */
@@ -46,6 +47,16 @@
     grid-auto-rows: auto;   /* no fixed row height — rows are only as tall as their content */
     gap: 4px 8px;           /* 4px row-gap (tight), 8px col-gap (matches editor) */
     width: max-content;
+  }
+
+  /* —— iPad / touch-device fluid grid override —— */
+  @media (max-width: 1194px) {
+    .form-grid {
+      --_cell: calc((min(calc(100vw - 2rem), 900px) - 11 * 8px) / 12);
+      grid-template-columns: repeat(12, var(--_cell));
+      width: 100%;
+    }
+    .preview-body { padding: 1rem; }
   }
 
   /* ── Cell ── */

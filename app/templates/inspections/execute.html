@@ -24,6 +24,7 @@
   .insp-body {
     background:#fff; border:1px solid #e2e8f0; border-top:none;
     border-radius: 0 0 12px 12px; padding:1.75rem; overflow-x:auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* ── 12-col grid (matches form editor exactly) ── */
@@ -33,6 +34,18 @@
     grid-auto-rows: 52px;   /* matches editor CELL_H — keeps proportions tight */
     gap: 4px 8px;
     width: max-content;
+  }
+
+  /* ── iPad / touch-device fluid grid override ── */
+  @media (max-width: 1194px) {
+    .form-grid {
+      --_gap: 8px;
+      --_cell: calc((min(calc(100vw - 2rem), 900px) - 11 * 8px) / 12);
+      grid-template-columns: repeat(12, var(--_cell));
+      grid-auto-rows: calc(var(--_cell) * 0.72);
+      width: 100%;
+    }
+    .insp-body { padding: 1rem; }
   }
   .fg-cell {
     overflow:hidden; display:flex; flex-direction:column; padding:.18rem .45rem;
@@ -120,6 +133,35 @@
   }
   .insp-footer .meta { color:#94a3b8; font-size:.8rem; }
   .insp-footer .meta strong { color:#e2e8f0; }
+
+  /* iPad: footer stacks vertically, full-width buttons */
+  @media (max-width: 1024px) {
+    .insp-footer {
+      flex-direction: column;
+      align-items: stretch;
+      padding: .75rem 1rem;
+      gap: .5rem;
+    }
+    .insp-footer .btn { width: 100%; justify-content: center; }
+    .insp-footer .meta { text-align: center; }
+
+    /* Header: stack on narrow screens */
+    .insp-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: .75rem;
+      padding: 1rem;
+    }
+    .insp-header .d-flex.gap-2 { width: 100%; flex-wrap: wrap; }
+    .insp-header .btn { flex: 1; justify-content: center; }
+
+    .insp-wrap { padding: 0 .5rem 5rem; }
+  }
+
+  /* Touch: ensure 44px tap targets on footer buttons */
+  @media (pointer: coarse) {
+    .insp-footer .btn { min-height: 48px; font-size: 1rem; }
+  }
 </style>
 {% endblock %}
 
