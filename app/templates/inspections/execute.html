@@ -496,5 +496,103 @@ function collectSignatures() {
 function confirmSubmit() {
   return confirm('Submit this inspection? This action cannot be undone.');
 }
+
+// ── Client-side image compression ─────────────────────────────────────────────
+// Compresses photos via Canvas before upload to prevent 413 errors.
+// Target: ≤ 1MB per image at 85% JPEG quality, max 1920px on longest side.
+const IMG_MAX_PX   = 1920;   // max dimension in pixels
+const IMG_QUALITY  = 0.85;   // JPEG quality (0–1)
+const IMG_MAX_BYTES = 1 * 1024 * 1024;  // 1MB per compressed image
+
+function compressImageFile(file) {
+  return new Promise((resolve) => {
+    // Only compress images that exceed the size threshold
+    if (!file.type.startsWith('image/') || file.size <= IMG_MAX_BYTES) {
+      return resolve(file);
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        // Calculate scaled dimensions
+        let { width, height } = img;
+        if (width > IMG_MAX_PX || height > IMG_MAX_PX) {
+          if (width >= height) {
+            height = Math.round(height * IMG_MAX_PX / width);
+            width  = IMG_MAX_PX;
+          } else {
+            width  = Math.round(width * IMG_MAX_PX / height);
+            height = IMG_MAX_PX;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width  = width;
+        canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob((blob) => {
+          // Create a new File from the compressed blob, preserving the name
+          const compressed = new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() });
+          resolve(compressed);
+        }, 'image/jpeg', IMG_QUALITY);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Intercept form submission — compress all image fields before sending
+document.getElementById('inspectionForm').addEventListener('submit', async function(e) {
+  const fileInputs = this.querySelectorAll('input[type="file"]');
+  if (!fileInputs.length) return; // nothing to compress
+
+  // Only intercept if there are files to compress
+  const hasFiles = Array.from(fileInputs).some(inp => inp.files && inp.files.length > 0);
+  if (!hasFiles) return;
+
+  e.preventDefault();
+
+  const btn = this.querySelector('button[type="submit"]');
+  const origText = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Compressing photos…';
+  }
+
+  try {
+    // Build a FormData object with compressed images
+    const formData = new FormData(this);
+
+    for (const input of fileInputs) {
+      if (!input.files || !input.files.length) continue;
+      const compressed = await compressImageFile(input.files[0]);
+      formData.set(input.name, compressed, compressed.name);
+    }
+
+    // Submit via fetch with the compressed FormData
+    const response = await fetch(this.action || window.location.href, {
+      method: 'POST',
+      body: formData,
+      credentials: 'same-origin',
+    });
+
+    if (response.redirected) {
+      window.location.href = response.url;
+    } else if (response.ok) {
+      window.location.reload();
+    } else {
+      // Surface server error (e.g. still-too-large after compression)
+      if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+      alert('Submission failed (HTTP ' + response.status + '). Please try again or remove some photos.');
+    }
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+    console.error('Photo compression error:', err);
+    alert('An error occurred while processing photos. Please try again.');
+  }
+});
 </script>
 {% endblock %}

@@ -44,6 +44,26 @@ def create_app(config_name='default'):
     app.register_blueprint(facilities.bp)
     app.register_blueprint(issues.bp)
 
+    # ── Error handler: 413 Request Entity Too Large ───────────────────────
+    # Nginx can return 413 before Flask sees the request; this handler covers
+    # the Flask-side rejection and gives users a clear, actionable message
+    # with a redirect back into the inspection workflow.
+    from werkzeug.exceptions import RequestEntityTooLarge
+
+    @app.errorhandler(RequestEntityTooLarge)
+    @app.errorhandler(413)
+    def handle_413(e):
+        from flask import request as flask_request, flash as flask_flash, redirect, url_for
+        flask_flash(
+            f'The uploaded file(s) are too large. '
+            f'Please reduce the photo size or upload fewer photos at once '
+            f'(maximum {app.config["MAX_CONTENT_LENGTH"] // (1024 * 1024)}MB per submission).',
+            'danger'
+        )
+        # Redirect back to the referring page if available, otherwise dashboard
+        referrer = flask_request.referrer
+        return redirect(referrer or url_for('dashboard.index')), 302
+
     with app.app_context():
         db.create_all()
 
