@@ -39,14 +39,14 @@
   /* ── iPad / touch-device fluid grid override ── */
   @media (max-width: 1194px) {
     .form-grid {
-      --_gap: 8px;
-      --_cell: calc((min(calc(100vw - 2rem), 900px) - 11 * 8px) / 12);
+      /* Tighter column gap (4px) so empty intermediate columns between fields
+         don't create a large visual gap — e.g. between rating stars and upload */
+      --_gap: 4px;
+      --_cell: calc((min(calc(100vw - 2rem), 900px) - 11 * 4px) / 12);
       grid-template-columns: repeat(12, var(--_cell));
-      /* Use auto rows so image/upload cells can expand to their content */
-      grid-auto-rows: auto;
-      width: 100%;
-      /* Minimum row height keeps non-image rows from collapsing */
       grid-auto-rows: minmax(calc(var(--_cell) * 0.72), auto);
+      gap: 4px var(--_gap);
+      width: 100%;
     }
     .insp-body { padding: 1rem; }
 

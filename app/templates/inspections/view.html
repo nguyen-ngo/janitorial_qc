@@ -19,7 +19,7 @@
   }
   .insp-body {
     background:#fff; border:1px solid #e2e8f0; border-top:none;
-    border-radius:0 0 12px 12px; padding:1.75rem; overflow-x:auto;
+    border-radius:0 0 12px 12px; padding:1.75rem; padding-bottom:3rem; overflow-x:auto;
     -webkit-overflow-scrolling: touch;
   }
   .meta-row { display:flex; flex-wrap:wrap; gap:1.5rem; margin-bottom:1.5rem; padding-bottom:1rem; border-bottom:1px solid #e2e8f0; }
@@ -31,7 +31,7 @@
   .form-grid {
     display:grid;
     grid-template-columns: repeat(12, 72px);
-    grid-auto-rows: 36px;
+    grid-auto-rows: minmax(36px, auto);
     gap: 3px 8px;
     width: max-content;
   }
@@ -41,7 +41,7 @@
     .form-grid {
       --_cell: calc((min(calc(100vw - 2rem), 900px) - 11 * 8px) / 12);
       grid-template-columns: repeat(12, var(--_cell));
-      grid-auto-rows: calc(var(--_cell) * 0.5);
+      grid-auto-rows: minmax(calc(var(--_cell) * 0.5), auto);
       width: 100%;
     }
     .insp-body { padding: 1rem; }
@@ -63,6 +63,13 @@
     display:flex; align-items:center;
   }
   .fg-cell .field-val.empty { color:#94a3b8; font-style:italic; }
+  /* Textarea values: wrap text, scroll vertically, align to top */
+  .fg-cell .field-val.multiline {
+    white-space:pre-wrap; overflow-y:auto; overflow-x:hidden;
+    text-overflow:clip; align-items:flex-start; word-break:break-word;
+    min-height:calc(0.78rem * 1.5 * 4 + 0.2rem * 2);  /* 4 lines × line-height + padding */
+    flex:none;
+  }
 
   /* Section heading — spans full width, single row */
   .section-head {
@@ -193,15 +200,22 @@
       {# Pass 1: find all rated rows AND which label IDs have a rated field after them #}
       {% set ns = namespace(rated_rows=[], visible_label_ids=[]) %}
 
-      {# 1a: collect rated row numbers #}
+      {# 1a: collect rows that have any answered/filled field (not just ratings) #}
+      {% set _skip_types = ['label', 'section', 'button_submit', 'button_print', 'button_email'] %}
       {% for field in form_fields %}
-        {% if field.type == 'rating' %}
-          {% set score = form_data.get(field.id | string, '0') | int %}
-          {% if score > 0 %}
+        {% if field.type not in _skip_types %}
+          {% set fval = form_data.get(field.id | string, '') %}
+          {# A row is "visible" if: rating has score>0, OR any other field has a non-empty value #}
+          {% if field.type == 'rating' %}
+            {% set score = fval | int %}
+            {% if score > 0 %}
+              {% for r in range(field.row, field.row + field.rowSpan) %}
+                {% if r not in ns.rated_rows %}{% set ns.rated_rows = ns.rated_rows + [r] %}{% endif %}
+              {% endfor %}
+            {% endif %}
+          {% elif fval and fval != '' and fval != [] %}
             {% for r in range(field.row, field.row + field.rowSpan) %}
-              {% if r not in ns.rated_rows %}
-                {% set ns.rated_rows = ns.rated_rows + [r] %}
-              {% endif %}
+              {% if r not in ns.rated_rows %}{% set ns.rated_rows = ns.rated_rows + [r] %}{% endif %}
             {% endfor %}
           {% endif %}
         {% endif %}
@@ -363,7 +377,7 @@
                 {% else %}
                   {# text, number, date, email, radio, select, textarea #}
                   <span class="field-lbl">{{ field.label }}</span>
-                  <div class="field-val {{ 'empty' if not val }}">{{ val or '—' }}</div>
+                  <div class="field-val {{ 'multiline' if ftype == 'textarea' }} {{ 'empty' if not val }}">{{ val or '—' }}</div>
                 {% endif %}
 
               </div>{# /fg-cell #}
