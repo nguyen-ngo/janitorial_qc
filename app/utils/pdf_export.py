@@ -149,61 +149,47 @@ def _score_color(score):
 # ── Meta info table ───────────────────────────────────────────────────────────
 
 def _meta_table(inspection):
-    def cell(label, value):
-        return [
-            Paragraph(label, STYLES['MetaLabel']),
-            Paragraph(str(value), STYLES['MetaValue']),
-        ]
-
-    date_str = inspection.inspection_date.strftime('%B %d, %Y')
-    time_str = inspection.inspection_date.strftime('%I:%M %p ET')
-    completed = (inspection.completed_at.strftime('%B %d, %Y  %I:%M %p ET')
-                 if inspection.completed_at else '—')
-
-    score_val = (f'{float(inspection.overall_score):.1f}%'
-                 if inspection.overall_score is not None else '—')
-
+    """Render a 6-column label/value grid covering the key inspection metadata."""
+    date_str   = inspection.inspection_date.strftime('%B %d, %Y')
+    time_str   = inspection.inspection_date.strftime('%I:%M %p ET')
+    completed  = (inspection.completed_at.strftime('%B %d, %Y  %I:%M %p ET')
+                  if inspection.completed_at else '—')
+    score_val  = (f'{float(inspection.overall_score):.1f}%'
+                  if inspection.overall_score is not None else '—')
     status_txt = inspection.status.replace('_', ' ').title()
+    area_txt   = inspection.area.name if inspection.area else '—'
 
-    area_txt = inspection.area.name if inspection.area else '—'
+    def lbl(text):
+        return Paragraph(text, STYLES['MetaLabel'])
 
-    data = [
-        [cell('INSPECTOR',    inspection.inspector.username),
-         cell('DATE',         date_str),
-         cell('TIME',         time_str)],
-        [cell('FACILITY',     inspection.facility.name),
-         cell('AREA',         area_txt),
-         cell('COMPLETED',    completed)],
-        [cell('TEMPLATE',     inspection.template.name),
-         cell('FREQUENCY',    inspection.template.frequency.title()),
-         cell('STATUS / SCORE', f'{status_txt}   {score_val}')],
+    def val(text):
+        return Paragraph(str(text), STYLES['MetaValue'])
+
+    # Each row: alternating label / value columns (6 cols total)
+    rows = [
+        [lbl('INSPECTOR'),   val(inspection.inspector.username),
+         lbl('DATE'),        val(date_str),
+         lbl('TIME'),        val(time_str)],
+        [lbl('FACILITY'),    val(inspection.facility.name),
+         lbl('AREA'),        val(area_txt),
+         lbl('COMPLETED'),   val(completed)],
+        [lbl('TEMPLATE'),    val(inspection.template.name),
+         lbl('FREQUENCY'),   val(inspection.template.frequency.title()),
+         lbl('STATUS / SCORE'), val(f'{status_txt}   {score_val}')],
     ]
 
-    # Flatten each inner list into a single-column cell using a mini Table
-    rows = []
-    for row in data:
-        rows.append([Table([[item] for item in pair],
-                           colWidths=[1.5 * inch],
-                           style=TableStyle([
-                               ('VALIGN',   (0, 0), (-1, -1), 'TOP'),
-                               ('LEFTPADDING',  (0, 0), (-1, -1), 0),
-                               ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                               ('TOPPADDING',   (0, 0), (-1, -1), 1),
-                               ('BOTTOMPADDING',(0, 0), (-1, -1), 1),
-                           ]))
-               for pair in row]
-
-    col_w = (letter[0] - 1.3 * inch) / 3
-    tbl = Table(rows, colWidths=[col_w] * 3)
+    col_w = (letter[0] - 1.3 * inch) / 6
+    tbl = Table(rows, colWidths=[col_w] * 6)
     tbl.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), C_LIGHT),
-        ('BOX',        (0, 0), (-1, -1), 0.5, C_BORDER),
-        ('INNERGRID',  (0, 0), (-1, -1), 0.5, C_BORDER),
-        ('VALIGN',     (0, 0), (-1, -1), 'TOP'),
+        ('BACKGROUND',   (0, 0), (-1, -1), C_LIGHT),
+        ('BOX',          (0, 0), (-1, -1), 0.5, C_BORDER),
+        ('INNERGRID',    (0, 0), (-1, -1), 0.5, C_BORDER),
+        ('VALIGN',       (0, 0), (-1, -1), 'TOP'),
         ('LEFTPADDING',  (0, 0), (-1, -1), 8),
         ('RIGHTPADDING', (0, 0), (-1, -1), 8),
-        ('TOPPADDING',   (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING',(0, 0), (-1, -1), 6),
+        ('TOPPADDING',   (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING',(0, 0), (-1, -1), 5),
+        ('TEXTCOLOR',    (0, 0), (-1, -1), C_DARK),
     ]))
     return tbl
 
