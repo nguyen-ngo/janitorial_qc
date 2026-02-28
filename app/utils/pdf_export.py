@@ -189,6 +189,7 @@ def _meta_table(inspection):
         ('RIGHTPADDING', (0, 0), (-1, -1), 8),
         ('TOPPADDING',   (0, 0), (-1, -1), 5),
         ('BOTTOMPADDING',(0, 0), (-1, -1), 5),
+        # Label rows get a lighter text treatment (already in STYLES['MetaLabel'])
         ('TEXTCOLOR',    (0, 0), (-1, -1), C_DARK),
     ]))
     return tbl
@@ -237,137 +238,202 @@ def _star_string(score, max_stars=5):
     return '★' * filled + '☆' * (max_stars - filled)
 
 
-_SKIP_TYPES = {'label', 'section', 'button_submit', 'button_print', 'button_email'}
+_SKIP_TYPES = {'button_submit', 'button_print', 'button_email'}
+_GRID_COLS   = 12   # matches the web UI 12-column grid
 
 
 def _form_fields_section(form_fields, form_data, static_folder):
-    """Render all answered form fields as a two-column table per row."""
+    """
+    Reconstruct the web UI grid layout in PDF form.
+
+    Fields are grouped by their grid row number.  Within each row the fields
+    are placed side-by-side with column widths proportional to their colSpan.
+    Section headings (type='section') are rendered as full-width banners
+    between groups of rows, exactly as they appear in the web UI.
+    """
     story = []
     story.append(Paragraph('Inspection Results', STYLES['SectionHead']))
-    story.append(HRFlowable(width='100%', thickness=1, color=C_BORDER,
-                             spaceAfter=6))
+    story.append(HRFlowable(width='100%', thickness=1, color=C_BORDER, spaceAfter=6))
 
-    current_section = None
-    rows = []           # list of [label_para, value_para] pairs
+    FULL_W = letter[0] - 1.3 * inch   # usable page width
+    UNIT   = FULL_W / _GRID_COLS       # width of one grid column unit
 
-    def _flush_rows():
-        if not rows:
-            return []
-        out = []
-        w = letter[0] - 1.3 * inch
-        for label_p, value_p in rows:
-            tbl = Table([[label_p, value_p]],
-                        colWidths=[w * 0.38, w * 0.62])
-            tbl.setStyle(TableStyle([
-                ('VALIGN',       (0, 0), (-1, -1), 'TOP'),
-                ('LEFTPADDING',  (0, 0), (-1, -1), 6),
-                ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-                ('TOPPADDING',   (0, 0), (-1, -1), 4),
-                ('BOTTOMPADDING',(0, 0), (-1, -1), 4),
-                ('LINEBELOW',    (0, 0), (-1, 0), 0.25, C_BORDER),
-            ]))
-            out.append(tbl)
-        rows.clear()
-        return out
+    # ── Group fields by row number, preserving original order ────────────────
+    from collections import defaultdict, OrderedDict
+    rows_map = OrderedDict()   # row_num -> [field, ...]
+    sections = {}              # row_num -> section label that precedes this row
 
+    pending_section = None
     for field in form_fields:
         ftype = field.get('type', '')
-        fid   = str(field.get('id', ''))
-        val   = form_data.get(fid, '')
-
+        if ftype in ('button_submit', 'button_print', 'button_email'):
+            continue
         if ftype == 'section':
-            story.extend(_flush_rows())
+            pending_section = field.get('label', '')
+            continue
+
+        row_num = field.get('row', 0)
+        if row_num not in rows_map:
+            rows_map[row_num] = []
+            if pending_section is not None:
+                sections[row_num] = pending_section
+                pending_section = None
+
+        rows_map[row_num].append(field)
+
+    # ── Render row by row ─────────────────────────────────────────────────────
+    for row_num, fields_in_row in rows_map.items():
+
+        # Emit section banner if one precedes this row
+        if row_num in sections:
             story.append(Spacer(1, 6))
-            story.append(Paragraph(field.get('label', ''),
-                                   ParagraphStyle('SecH', fontName='Helvetica-Bold',
-                                                  fontSize=9.5, textColor=C_BLUE,
-                                                  spaceBefore=6, spaceAfter=2,
-                                                  borderPad=3,
-                                                  backColor=colors.HexColor('#eff6ff'))))
-            story.append(HRFlowable(width='100%', thickness=0.5,
-                                     color=C_BLUE, spaceAfter=4))
-            continue
+            sec_label = sections[row_num]
+            # Bold letter prefix (e.g. "A.", "B.") + rest of label
+            story.append(Paragraph(
+                sec_label,
+                ParagraphStyle('SecBanner', fontName='Helvetica-Bold',
+                               fontSize=10, textColor=C_DARK,
+                               spaceBefore=8, spaceAfter=3),
+            ))
+            story.append(HRFlowable(width='100%', thickness=0.75,
+                                     color=C_BORDER, spaceAfter=4))
 
-        if ftype in _SKIP_TYPES:
-            continue
+        # Build one Table row with cells sized by colSpan
+        cells      = []
+        col_widths = []
+        has_content = False
 
-        label = field.get('label', fid)
-        label_p = Paragraph(label, STYLES['FieldLabel'])
+        for field in fields_in_row:
+            ftype    = field.get('type', '')
+            col_span = field.get('colSpan', 1)
+            cell_w   = UNIT * col_span
 
-        # ── Format value by type ──
-        if ftype == 'rating':
-            score_int = int(val) if str(val).isdigit() else 0
-            if score_int > 0:
-                val_text = f'{_star_string(score_int)}  ({score_int}/5)'
-            else:
-                val_text = '<i><font color="#94a3b8">Not rated</font></i>'
-            value_p = Paragraph(val_text, STYLES['FieldValue'])
-
-        elif ftype == 'checkbox':
-            val_text = ('Yes' if val == 'yes' else 'No')
-            value_p  = Paragraph(val_text, STYLES['FieldValue'])
-
-        elif ftype == 'checkbox_group':
-            if val and isinstance(val, list):
-                val_text = ',  '.join(val)
-            else:
-                val_text = '<i><font color="#94a3b8">None selected</font></i>'
-            value_p = Paragraph(val_text, STYLES['FieldValue'])
-
-        elif ftype == 'image':
-            if val:
-                img_path = os.path.join(static_folder, val)
-                if os.path.exists(img_path):
-                    try:
-                        max_w, max_h = 2.5 * inch, 1.8 * inch
-                        img = RLImage(img_path, width=max_w, height=max_h,
-                                      kind='proportional')
-                        rows.append([label_p, img])
-                        continue
-                    except Exception:
-                        pass
-            value_p = Paragraph('<i><font color="#94a3b8">No photo</font></i>',
-                                STYLES['FieldValue'])
-
-        elif ftype == 'signature':
-            # Base64 signatures can't be embedded inline easily — note presence only
-            if val and str(val).startswith('data:'):
-                val_text = '[Signature captured]'
-            else:
-                val_text = '<i><font color="#94a3b8">No signature</font></i>'
-            value_p = Paragraph(val_text, STYLES['FieldValue'])
-
-        elif ftype == 'table':
-            if val and isinstance(val, list) and len(val) > 0:
-                headers = field.get('col_headers', list(val[0].keys()) if val else [])
-                tbl_data = [headers] + [[row.get(h, '') for h in headers] for row in val]
-                inner = Table(tbl_data)
-                inner.setStyle(TableStyle([
-                    ('BACKGROUND',   (0, 0), (-1, 0),  C_LIGHT),
-                    ('FONTNAME',     (0, 0), (-1, 0),  'Helvetica-Bold'),
-                    ('FONTSIZE',     (0, 0), (-1, -1), 7),
-                    ('INNERGRID',    (0, 0), (-1, -1), 0.25, C_BORDER),
-                    ('BOX',          (0, 0), (-1, -1), 0.5,  C_BORDER),
-                    ('TOPPADDING',   (0, 0), (-1, -1), 2),
-                    ('BOTTOMPADDING',(0, 0), (-1, -1), 2),
-                ]))
-                rows.append([label_p, inner])
+            if ftype == 'label':
+                fs_map = {'small': 8, 'normal': 9, 'large': 11, 'x-large': 13}
+                fs = fs_map.get(field.get('font_size', 'normal'), 9)
+                fw = 'Helvetica-Bold' if field.get('font_weight') == 'bold' else 'Helvetica'
+                p = Paragraph(
+                    field.get('text_content', ''),
+                    ParagraphStyle('li', fontName=fw, fontSize=fs,
+                                   textColor=C_DARK, leading=fs + 3),
+                )
+                cells.append(p)
+                col_widths.append(cell_w)
+                has_content = True
                 continue
-            value_p = Paragraph('<i><font color="#94a3b8">No data</font></i>',
+
+            fid = str(field.get('id', ''))
+            val = form_data.get(fid, '')
+            lbl = field.get('label', '')
+
+            lbl_p = Paragraph(lbl, STYLES['FieldLabel'])
+
+            # ── Value content ────────────────────────────────────────────────
+            if ftype == 'rating':
+                score_int = int(val) if str(val).isdigit() else 0
+                if score_int > 0:
+                    stars = (f'<font color="#f59e0b">{"★" * score_int}'
+                             f'{"☆" * (5 - score_int)}</font>'
+                             f'  <font color="#64748b">{score_int}/5</font>')
+                else:
+                    stars = '<font color="#94a3b8"><i>Not rated</i></font>'
+                val_p = Paragraph(stars, ParagraphStyle(
+                    'rv', fontName='Helvetica', fontSize=9, leading=12))
+
+            elif ftype == 'image':
+                if val:
+                    img_path = os.path.join(static_folder, val)
+                    if os.path.exists(img_path):
+                        try:
+                            val_p = RLImage(img_path,
+                                            width=min(cell_w - 12, 1.4 * inch),
+                                            height=1.0 * inch,
+                                            kind='proportional')
+                        except Exception:
+                            val_p = Paragraph(
+                                '<i><font color="#94a3b8">Photo error</font></i>',
                                 STYLES['FieldValue'])
+                    else:
+                        val_p = Paragraph(
+                            '<i><font color="#94a3b8">No photo</font></i>',
+                            STYLES['FieldValue'])
+                else:
+                    val_p = Paragraph(
+                        '<i><font color="#94a3b8">No photo</font></i>',
+                        STYLES['FieldValue'])
 
-        else:
-            # text, textarea, number, date, email, radio, select
-            disp = str(val) if val else '—'
-            value_p = Paragraph(disp, STYLES['FieldValue'])
+            elif ftype == 'signature':
+                val_p = Paragraph(
+                    '[Signature captured]' if (val and str(val).startswith('data:'))
+                    else '<i><font color="#94a3b8">No signature</font></i>',
+                    STYLES['FieldValue'])
 
-        if not val and ftype not in ('rating',):
-            # Skip entirely empty non-rated fields to keep the PDF concise
+            elif ftype == 'checkbox':
+                val_p = Paragraph('Yes' if val == 'yes' else 'No',
+                                  STYLES['FieldValue'])
+
+            elif ftype == 'checkbox_group':
+                val_p = Paragraph(
+                    ',  '.join(val) if (val and isinstance(val, list))
+                    else '<i><font color="#94a3b8">None</font></i>',
+                    STYLES['FieldValue'])
+
+            elif ftype == 'table':
+                if val and isinstance(val, list) and len(val) > 0:
+                    headers  = field.get('col_headers',
+                                         list(val[0].keys()) if val else [])
+                    tbl_data = ([headers] +
+                                [[r.get(h, '') for h in headers] for r in val])
+                    val_p = Table(tbl_data)
+                    val_p.setStyle(TableStyle([
+                        ('BACKGROUND',    (0, 0), (-1, 0),  C_LIGHT),
+                        ('FONTNAME',      (0, 0), (-1, 0),  'Helvetica-Bold'),
+                        ('FONTSIZE',      (0, 0), (-1, -1), 7),
+                        ('INNERGRID',     (0, 0), (-1, -1), 0.25, C_BORDER),
+                        ('BOX',           (0, 0), (-1, -1), 0.5,  C_BORDER),
+                        ('TOPPADDING',    (0, 0), (-1, -1), 2),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                    ]))
+                else:
+                    val_p = Paragraph(
+                        '<i><font color="#94a3b8">No data</font></i>',
+                        STYLES['FieldValue'])
+
+            else:
+                disp = str(val) if val else ''
+                val_p = Paragraph(disp, STYLES['FieldValue'])
+
+            # ── Wrap into label-over-value form box ──────────────────────────
+            box = Table([[lbl_p], [val_p]], colWidths=[cell_w - 4])
+            box.setStyle(TableStyle([
+                ('VALIGN',       (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING',  (0, 0), (-1, -1), 5),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+                ('TOPPADDING',   (0, 0), (0, 0),   2),
+                ('BOTTOMPADDING',(0, 0), (0, 0),   1),
+                ('TOPPADDING',   (0, 1), (0, 1),   3),
+                ('BOTTOMPADDING',(0, 1), (0, 1),   4),
+                ('BOX',          (0, 1), (0, 1),   0.5, C_BORDER),
+                ('BACKGROUND',   (0, 1), (0, 1),   colors.HexColor('#f8fafc')),
+            ]))
+
+            cells.append(box)
+            col_widths.append(cell_w)
+            has_content = True
+
+        if not cells:
             continue
 
-        rows.append([label_p, value_p])
+        row_tbl = Table([cells], colWidths=col_widths)
+        row_tbl.setStyle(TableStyle([
+            ('VALIGN',       (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING',  (0, 0), (-1, -1), 2),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+            ('TOPPADDING',   (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING',(0, 0), (-1, -1), 2),
+        ]))
+        story.append(row_tbl)
 
-    story.extend(_flush_rows())
     return story
 
 
