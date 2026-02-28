@@ -1,5 +1,5 @@
 from app import db
-from datetime import datetime
+from app.utils.time_utils import now_eastern
 import json
 
 
@@ -11,7 +11,7 @@ class InspectionTemplate(db.Model):
     description = db.Column(db.Text)
     frequency   = db.Column(db.Enum('daily', 'weekly', 'monthly', 'quarterly'))
     created_by  = db.Column(db.Integer, db.ForeignKey('users.id'))
-    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at  = db.Column(db.DateTime, default=now_eastern)
     form_schema = db.Column(db.JSON, nullable=True)
 
     checklist_items = db.relationship('ChecklistItem', backref='template', lazy='dynamic', cascade='all, delete-orphan')
@@ -57,7 +57,7 @@ class Inspection(db.Model):
     facility_id     = db.Column(db.Integer, db.ForeignKey('facilities.id'), nullable=False)
     area_id         = db.Column(db.Integer, db.ForeignKey('areas.id'))
     inspector_id    = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    inspection_date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    inspection_date = db.Column(db.DateTime, nullable=False, default=now_eastern)
     overall_score   = db.Column(db.Numeric(5, 2))
     status          = db.Column(db.Enum('in_progress', 'completed', 'flagged'), default='in_progress')
     notes           = db.Column(db.Text)          # inspector free-text notes

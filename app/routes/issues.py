@@ -1,4 +1,4 @@
-from datetime import datetime
+from app.utils.time_utils import now_eastern
 from flask import (Blueprint, render_template, redirect, url_for,
                    flash, request, current_app)
 from flask_login import login_required, current_user
@@ -66,7 +66,7 @@ def view(issue_id):
             issue.assigned_to = form.assigned_to.data or None
 
         if form.status.data == 'resolved' and not issue.resolved_at:
-            issue.resolved_at = datetime.utcnow()
+            issue.resolved_at = now_eastern()
         elif form.status.data != 'resolved':
             issue.resolved_at = None
 
@@ -130,7 +130,7 @@ def create():
             photo_path  = photo_path,
             status      = 'open',
             assigned_to = form.assigned_to.data or None,
-            reported_at = datetime.utcnow(),
+            reported_at = now_eastern(),
         )
         db.session.add(issue)
         db.session.commit()

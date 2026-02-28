@@ -1,6 +1,7 @@
 import csv
 import io
 from datetime import datetime, timedelta
+from app.utils.time_utils import now_eastern
 from flask import (Blueprint, render_template, request,
                    Response, stream_with_context)
 from flask_login import login_required, current_user
@@ -17,7 +18,7 @@ bp = Blueprint('reports', __name__, url_prefix='/reports')
 
 def _date_range():
     """Parse ?start= and ?end= query params; default to last 30 days."""
-    end_default   = datetime.utcnow()
+    end_default   = now_eastern()
     start_default = end_default - timedelta(days=30)
     try:
         start = datetime.strptime(request.args.get('start', ''), '%Y-%m-%d')

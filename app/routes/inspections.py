@@ -2,6 +2,7 @@ import os
 import json
 import uuid
 from datetime import datetime
+from app.utils.time_utils import now_eastern
 from flask import (Blueprint, render_template, redirect, url_for,
                    flash, request, current_app, jsonify)
 from flask_login import login_required, current_user
@@ -223,7 +224,7 @@ def start():
             facility_id     = form.facility_id.data,
             area_id         = form.area_id.data or None,
             inspector_id    = current_user.id,
-            inspection_date = datetime.utcnow(),
+            inspection_date = now_eastern(),
             status          = 'in_progress',
             notes           = form.notes.data or None,
         )
@@ -300,7 +301,7 @@ def execute(inspection_id):
             score = _compute_score_from_form(form_fields, responses)
             inspection.overall_score = score
             inspection.status        = 'completed'
-            inspection.completed_at  = datetime.utcnow()
+            inspection.completed_at  = now_eastern()
 
             # Persist the final form data alongside any inspector notes
             _save_responses(inspection, responses)
@@ -401,7 +402,7 @@ def flag_issue(inspection_id):
             photo_path    = photo_path,
             status        = 'open',
             assigned_to   = form.assigned_to.data or None,
-            reported_at   = datetime.utcnow(),
+            reported_at   = now_eastern(),
         )
         db.session.add(issue)
 

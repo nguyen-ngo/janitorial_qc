@@ -11,8 +11,9 @@ from app.models.user import User
 # ── Auth ─────────────────────────────────────────────────────────────────────
 
 class LoginForm(FlaskForm):
-    username = StringField('Username', validators=[DataRequired(), Length(min=3, max=100)])
-    password = PasswordField('Password', validators=[DataRequired()])
+    username    = StringField('Username', validators=[DataRequired(), Length(min=3, max=100)])
+    password    = PasswordField('Password', validators=[DataRequired()])
+    remember_me = BooleanField('Keep me logged in')
 
 
 class UserForm(FlaskForm):

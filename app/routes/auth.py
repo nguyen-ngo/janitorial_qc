@@ -35,7 +35,7 @@ def login():
         user = User.query.filter_by(username=form.username.data).first()
 
         if user and user.check_password(form.password.data):
-            login_user(user)
+            login_user(user, remember=form.remember_me.data)
             # Use validated next URL — never redirect blindly to request.args['next']
             next_page = _safe_next(request.args.get('next'))
             flash(f'Welcome back, {user.username}!', 'success')

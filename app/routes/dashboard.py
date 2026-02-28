@@ -7,6 +7,7 @@ from app.models.issue import Issue
 from app.models.user import User
 from sqlalchemy import func
 from datetime import datetime, timedelta
+from app.utils.time_utils import now_eastern
 
 bp = Blueprint('dashboard', __name__)
 
@@ -15,7 +16,7 @@ bp = Blueprint('dashboard', __name__)
 @login_required
 def index():
     # Get today's date range
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = now_eastern().replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = today_start + timedelta(days=1)
     
     # Statistics for today
@@ -55,7 +56,7 @@ def index():
         ).count()
     
     # Calculate average score (last 30 days)
-    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    thirty_days_ago = now_eastern() - timedelta(days=30)
     avg_score_query = Inspection.query.filter(
         Inspection.status == 'completed',
         Inspection.overall_score.isnot(None),

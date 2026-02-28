@@ -1,5 +1,5 @@
 from app import db
-from datetime import datetime
+from app.utils.time_utils import now_eastern
 
 
 class IssueComment(db.Model):
@@ -10,7 +10,7 @@ class IssueComment(db.Model):
     user_id       = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     status_at_time = db.Column(db.String(20))   # snapshot of issue status when comment was made
     body          = db.Column(db.Text, nullable=False)
-    created_at    = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at    = db.Column(db.DateTime, default=now_eastern, nullable=False)
 
     # Relationships
     author = db.relationship('User', foreign_keys=[user_id])
@@ -30,7 +30,7 @@ class Issue(db.Model):
     photo_path    = db.Column(db.String(255))
     status        = db.Column(db.Enum('open', 'in_progress', 'resolved'), default='open')
     assigned_to   = db.Column(db.Integer, db.ForeignKey('users.id'))
-    reported_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    reported_at   = db.Column(db.DateTime, default=now_eastern)
     resolved_at   = db.Column(db.DateTime)
     result_notes  = db.Column(db.Text)
     result_photos = db.Column(db.JSON)   # list of relative paths e.g. ["uploads/issue_photos/abc.jpg"]

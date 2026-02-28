@@ -1,7 +1,7 @@
 from app import db, login_manager
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from app.utils.time_utils import now_eastern
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -15,7 +15,7 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.Enum('admin', 'supervisor', 'inspector'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=now_eastern)
 
     # Relationships
     inspections = db.relationship('Inspection', backref='inspector', lazy='dynamic')
