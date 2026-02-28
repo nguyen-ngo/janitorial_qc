@@ -449,13 +449,18 @@
 <script>
 // ── Rating stars ─────────────────────────────────────────────────────────────
 function setRating(btn) {
-  const group  = btn.closest('.rating-stars');
-  const val    = parseInt(btn.dataset.val);
-  const input  = document.getElementById(btn.dataset.target);
-  group.dataset.rating = val;
-  if (input) input.value = val;
+  const group   = btn.closest('.rating-stars');
+  const clicked = parseInt(btn.dataset.val);
+  const current = parseInt(group.dataset.rating || 0);
+  const input   = document.getElementById(btn.dataset.target);
+
+  // Toggle off: clicking the currently active star clears the rating to 0.
+  const newVal = (clicked === current) ? 0 : clicked;
+
+  group.dataset.rating = newVal;
+  if (input) input.value = newVal;
   group.querySelectorAll('button').forEach(b => {
-    b.classList.toggle('on', parseInt(b.dataset.val) <= val);
+    b.classList.toggle('on', parseInt(b.dataset.val) <= newVal);
   });
 }
 
