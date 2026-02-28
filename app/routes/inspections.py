@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from app.utils.time_utils import now_eastern
 from flask import (Blueprint, render_template, redirect, url_for,
-                   flash, request, current_app, jsonify)
+                   flash, request, current_app, jsonify, Response)
 from flask_login import login_required, current_user
 from app import db
 from app.models.inspection import (Inspection, InspectionTemplate,
@@ -14,6 +14,7 @@ from app.models.issue import Issue
 from app.models.user import User
 from app.utils.forms import StartInspectionForm, IssueForm
 from app.utils.decorators import supervisor_required
+from app.utils.pdf_export import generate_inspection_pdf
 
 bp = Blueprint('inspections', __name__, url_prefix='/inspections')
 
@@ -415,6 +416,59 @@ def flag_issue(inspection_id):
 
     return render_template('inspections/flag_issue.html',
                            form=form, inspection=inspection)
+
+
+# ── Export to PDF ────────────────────────────────────────────────────────────
+
+@bp.route('/<int:inspection_id>/export-pdf')
+@login_required
+def export_pdf(inspection_id):
+    """Generate and stream a PDF report for the given inspection."""
+    inspection = Inspection.query.get_or_404(inspection_id)
+
+    # Inspectors may only export their own inspections
+    if current_user.role == 'inspector' and inspection.inspector_id != current_user.id:
+        flash('Access denied.', 'danger')
+        return redirect(url_for('inspections.index'))
+
+    template    = inspection.template
+    form_fields = sorted(template.get_form_schema(),
+                         key=lambda f: (f.get('row', 0), f.get('col', 0)))
+
+    form_data = {}
+    if inspection.notes:
+        try:
+            parsed = json.loads(inspection.notes)
+            if isinstance(parsed, dict):
+                form_data = parsed.get('_form_data', {})
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    issues = inspection.issues.order_by(Issue.reported_at.desc()).all()
+
+    static_folder = os.path.join(current_app.root_path, 'static')
+
+    pdf_bytes = generate_inspection_pdf(
+        inspection   = inspection,
+        form_fields  = form_fields,
+        form_data    = form_data,
+        issues       = issues,
+        static_folder= static_folder,
+    )
+
+    filename = (f'inspection_{inspection.id}_'
+                f'{inspection.inspection_date.strftime("%Y%m%d")}.pdf')
+
+    current_app.logger.info(
+        'PDF export | inspection_id=%s | inspector=%s | by=%s',
+        inspection.id, inspection.inspector.username, current_user.username
+    )
+
+    return Response(
+        pdf_bytes,
+        mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
 
 
 # ── Delete ────────────────────────────────────────────────────────────────────

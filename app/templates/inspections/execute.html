@@ -455,6 +455,7 @@ function setRating(btn) {
   const input   = document.getElementById(btn.dataset.target);
 
   // Toggle off: clicking the currently active star clears the rating to 0.
+  // This allows removal of a single-star (or any) rating via a second click.
   const newVal = (clicked === current) ? 0 : clicked;
 
   group.dataset.rating = newVal;
