@@ -281,14 +281,54 @@ def _form_fields_section(form_fields, form_data, static_folder):
 
         rows_map[row_num].append(field)
 
+    # ── Pre-compute which rows have at least one visible field ───────────────
+    # A row is visible if it contains a text/textarea/label field, OR any other
+    # field type that has a non-empty value.  This is used to suppress section
+    # banners whose every subordinate row is empty.
+    _ALWAYS_SHOW_PRE = {'text', 'textarea', 'label'}
+
+    def _row_has_content(fields_in_row):
+        for f in fields_in_row:
+            ft  = f.get('type', '')
+            fid = str(f.get('id', ''))
+            v   = form_data.get(fid, '')
+            if ft in _ALWAYS_SHOW_PRE:
+                return True
+            if ft == 'rating'        and str(v).isdigit() and int(v) > 0:  return True
+            if ft == 'checkbox'      and v == 'yes':                        return True
+            if ft == 'checkbox_group'and isinstance(v, list) and v:        return True
+            if ft == 'image'         and v:                                 return True
+            if ft == 'signature'     and v and str(v).startswith('data:'): return True
+            if ft == 'table'         and isinstance(v, list) and v:        return True
+            if ft in ('number','date','email','radio','select') and v:      return True
+        return False
+
+    # Build a set of section-trigger row numbers that have visible content somewhere
+    # in their subordinate rows (from their row_num up to the next section's row_num).
+    section_row_nums = sorted(sections.keys())
+    all_row_nums     = list(rows_map.keys())
+
+    def _section_has_visible_rows(sec_row_num):
+        idx = section_row_nums.index(sec_row_num)
+        next_sec = section_row_nums[idx + 1] if idx + 1 < len(section_row_nums) else None
+        for rn in all_row_nums:
+            if rn < sec_row_num:
+                continue
+            if next_sec is not None and rn >= next_sec:
+                break
+            if _row_has_content(rows_map[rn]):
+                return True
+        return False
+
     # ── Render row by row ─────────────────────────────────────────────────────
     for row_num, fields_in_row in rows_map.items():
 
-        # Emit section banner if one precedes this row
+        # Emit section banner only if its subordinate rows have visible content
         if row_num in sections:
+            if not _section_has_visible_rows(row_num):
+                continue   # skip the banner — all rows beneath it are empty
             story.append(Spacer(1, 6))
             sec_label = sections[row_num]
-            # Bold letter prefix (e.g. "A.", "B.") + rest of label
             story.append(Paragraph(
                 sec_label,
                 ParagraphStyle('SecBanner', fontName='Helvetica-Bold',
@@ -298,16 +338,21 @@ def _form_fields_section(form_fields, form_data, static_folder):
             story.append(HRFlowable(width='100%', thickness=0.75,
                                      color=C_BORDER, spaceAfter=4))
 
-        # Build one Table row with cells sized by colSpan
+        # Build one Table row with cells sized by colSpan.
+        # Fields with no value are skipped unless they are text/textarea/label —
+        # those always appear so free-text notes are never suppressed.
         cells      = []
         col_widths = []
-        has_content = False
+
+        # Types that are always shown regardless of value
+        _ALWAYS_SHOW = {'text', 'textarea', 'label'}
 
         for field in fields_in_row:
             ftype    = field.get('type', '')
             col_span = field.get('colSpan', 1)
             cell_w   = UNIT * col_span
 
+            # ── Inline label (free-standing text element) ─────────────────────
             if ftype == 'label':
                 fs_map = {'small': 8, 'normal': 9, 'large': 11, 'x-large': 13}
                 fs = fs_map.get(field.get('font_size', 'normal'), 9)
@@ -319,87 +364,91 @@ def _form_fields_section(form_fields, form_data, static_folder):
                 )
                 cells.append(p)
                 col_widths.append(cell_w)
-                has_content = True
                 continue
 
             fid = str(field.get('id', ''))
             val = form_data.get(fid, '')
             lbl = field.get('label', '')
 
+            # ── Skip fields with no value unless type is always-shown ─────────
+            if ftype not in _ALWAYS_SHOW:
+                if ftype == 'rating':
+                    if not str(val).isdigit() or int(val) == 0:
+                        continue
+                elif ftype == 'checkbox':
+                    if val != 'yes':
+                        continue
+                elif ftype == 'checkbox_group':
+                    if not val or not isinstance(val, list) or len(val) == 0:
+                        continue
+                elif ftype == 'image':
+                    if not val:
+                        continue
+                elif ftype == 'signature':
+                    if not val or not str(val).startswith('data:'):
+                        continue
+                elif ftype == 'table':
+                    if not val or not isinstance(val, list) or len(val) == 0:
+                        continue
+                elif ftype in ('number', 'date', 'email', 'radio', 'select'):
+                    if not val:
+                        continue
+
             lbl_p = Paragraph(lbl, STYLES['FieldLabel'])
 
             # ── Value content ────────────────────────────────────────────────
             if ftype == 'rating':
-                score_int = int(val) if str(val).isdigit() else 0
-                if score_int > 0:
-                    stars = (f'<font color="#f59e0b">{"★" * score_int}'
-                             f'{"☆" * (5 - score_int)}</font>'
-                             f'  <font color="#64748b">{score_int}/5</font>')
-                else:
-                    stars = '<font color="#94a3b8"><i>Not rated</i></font>'
+                score_int = int(val)
+                stars = (f'<font color="#f59e0b">{"★" * score_int}'
+                         f'{"☆" * (5 - score_int)}</font>'
+                         f'  <font color="#64748b">{score_int}/5</font>')
                 val_p = Paragraph(stars, ParagraphStyle(
                     'rv', fontName='Helvetica', fontSize=9, leading=12))
 
             elif ftype == 'image':
-                if val:
-                    img_path = os.path.join(static_folder, val)
-                    if os.path.exists(img_path):
-                        try:
-                            val_p = RLImage(img_path,
-                                            width=min(cell_w - 12, 1.4 * inch),
-                                            height=1.0 * inch,
-                                            kind='proportional')
-                        except Exception:
-                            val_p = Paragraph(
-                                '<i><font color="#94a3b8">Photo error</font></i>',
-                                STYLES['FieldValue'])
-                    else:
+                img_path = os.path.join(static_folder, val)
+                if os.path.exists(img_path):
+                    try:
+                        val_p = RLImage(img_path,
+                                        width=min(cell_w - 12, 1.4 * inch),
+                                        height=1.0 * inch,
+                                        kind='proportional')
+                    except Exception:
                         val_p = Paragraph(
-                            '<i><font color="#94a3b8">No photo</font></i>',
+                            '<i><font color="#94a3b8">Photo error</font></i>',
                             STYLES['FieldValue'])
                 else:
                     val_p = Paragraph(
-                        '<i><font color="#94a3b8">No photo</font></i>',
+                        '<i><font color="#94a3b8">File not found</font></i>',
                         STYLES['FieldValue'])
 
             elif ftype == 'signature':
-                val_p = Paragraph(
-                    '[Signature captured]' if (val and str(val).startswith('data:'))
-                    else '<i><font color="#94a3b8">No signature</font></i>',
-                    STYLES['FieldValue'])
+                val_p = Paragraph('[Signature captured]', STYLES['FieldValue'])
 
             elif ftype == 'checkbox':
-                val_p = Paragraph('Yes' if val == 'yes' else 'No',
-                                  STYLES['FieldValue'])
+                val_p = Paragraph('Yes', STYLES['FieldValue'])
 
             elif ftype == 'checkbox_group':
-                val_p = Paragraph(
-                    ',  '.join(val) if (val and isinstance(val, list))
-                    else '<i><font color="#94a3b8">None</font></i>',
-                    STYLES['FieldValue'])
+                val_p = Paragraph(',  '.join(val), STYLES['FieldValue'])
 
             elif ftype == 'table':
-                if val and isinstance(val, list) and len(val) > 0:
-                    headers  = field.get('col_headers',
-                                         list(val[0].keys()) if val else [])
-                    tbl_data = ([headers] +
-                                [[r.get(h, '') for h in headers] for r in val])
-                    val_p = Table(tbl_data)
-                    val_p.setStyle(TableStyle([
-                        ('BACKGROUND',    (0, 0), (-1, 0),  C_LIGHT),
-                        ('FONTNAME',      (0, 0), (-1, 0),  'Helvetica-Bold'),
-                        ('FONTSIZE',      (0, 0), (-1, -1), 7),
-                        ('INNERGRID',     (0, 0), (-1, -1), 0.25, C_BORDER),
-                        ('BOX',           (0, 0), (-1, -1), 0.5,  C_BORDER),
-                        ('TOPPADDING',    (0, 0), (-1, -1), 2),
-                        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-                    ]))
-                else:
-                    val_p = Paragraph(
-                        '<i><font color="#94a3b8">No data</font></i>',
-                        STYLES['FieldValue'])
+                headers  = field.get('col_headers',
+                                     list(val[0].keys()) if val else [])
+                tbl_data = ([headers] +
+                            [[r.get(h, '') for h in headers] for r in val])
+                val_p = Table(tbl_data)
+                val_p.setStyle(TableStyle([
+                    ('BACKGROUND',    (0, 0), (-1, 0),  C_LIGHT),
+                    ('FONTNAME',      (0, 0), (-1, 0),  'Helvetica-Bold'),
+                    ('FONTSIZE',      (0, 0), (-1, -1), 7),
+                    ('INNERGRID',     (0, 0), (-1, -1), 0.25, C_BORDER),
+                    ('BOX',           (0, 0), (-1, -1), 0.5,  C_BORDER),
+                    ('TOPPADDING',    (0, 0), (-1, -1), 2),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                ]))
 
             else:
+                # text, textarea, number, date, email, radio, select
                 disp = str(val) if val else ''
                 val_p = Paragraph(disp, STYLES['FieldValue'])
 
@@ -419,8 +468,8 @@ def _form_fields_section(form_fields, form_data, static_folder):
 
             cells.append(box)
             col_widths.append(cell_w)
-            has_content = True
 
+        # Skip the entire row if nothing made it through the filter
         if not cells:
             continue
 
