@@ -12,6 +12,61 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/ipad_responsive.css') }}">
     {% block extra_css %}{% endblock %}
+    <style>
+        /* ── Notification bell styles ── */
+        .notif-bell-wrapper {
+            position: relative;
+        }
+        .notif-badge {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            font-size: 0.6rem;
+            min-width: 16px;
+            height: 16px;
+            line-height: 16px;
+            padding: 0 4px;
+            border-radius: 8px;
+            pointer-events: none;
+        }
+        .notif-dropdown {
+            width: 360px;
+            max-height: 480px;
+            overflow-y: auto;
+            padding: 0;
+        }
+        .notif-item {
+            border-left: 3px solid transparent;
+            transition: background 0.15s;
+        }
+        .notif-item.unread {
+            border-left-color: #0d6efd;
+            background-color: #f0f6ff;
+        }
+        .notif-item:hover {
+            background-color: #e8f0fe;
+        }
+        .notif-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+        .notif-body {
+            font-size: 0.78rem;
+            color: #555;
+            white-space: normal;
+        }
+        .notif-time {
+            font-size: 0.7rem;
+            color: #999;
+        }
+        .notif-empty {
+            padding: 24px;
+            text-align: center;
+            color: #aaa;
+            font-size: 0.85rem;
+        }
+    </style>
 </head>
 <body>
     {% if current_user.is_authenticated %}
@@ -49,7 +104,42 @@
                     </li>
                     {% endif %}
                 </ul>
-                <ul class="navbar-nav">
+                <ul class="navbar-nav align-items-center">
+
+                    <!-- ── Notification Bell ── -->
+                    <li class="nav-item dropdown me-2">
+                        <a class="nav-link position-relative notif-bell-wrapper"
+                           href="#"
+                           id="notifDropdown"
+                           role="button"
+                           data-bs-toggle="dropdown"
+                           aria-expanded="false"
+                           title="Notifications">
+                            <i class="bi bi-bell fs-5"></i>
+                            {% if unread_notification_count > 0 %}
+                            <span class="badge bg-danger notif-badge" id="notif-count-badge">
+                                {{ unread_notification_count if unread_notification_count <= 99 else '99+' }}
+                            </span>
+                            {% else %}
+                            <span class="badge bg-danger notif-badge d-none" id="notif-count-badge"></span>
+                            {% endif %}
+                        </a>
+                        <div class="dropdown-menu dropdown-menu-end notif-dropdown shadow" id="notif-dropdown-menu">
+                            <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                                <span class="fw-semibold" style="font-size:0.9rem;">Notifications</span>
+                                <button class="btn btn-link btn-sm p-0 text-muted text-decoration-none"
+                                        id="mark-all-read-btn"
+                                        style="font-size:0.75rem;">
+                                    Mark all as read
+                                </button>
+                            </div>
+                            <div id="notif-list">
+                                <div class="notif-empty">Loading…</div>
+                            </div>
+                        </div>
+                    </li>
+                    <!-- ── End Notification Bell ── -->
+
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-person-circle"></i> {{ current_user.username }}
@@ -83,5 +173,131 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     {% block extra_js %}{% endblock %}
+
+    {% if current_user.is_authenticated %}
+    <script>
+    (function () {
+        'use strict';
+
+        const FEED_URL        = '{{ url_for("notifications.feed") }}';
+        const MARK_READ_BASE  = '/notifications/';
+        const MARK_ALL_URL    = '{{ url_for("notifications.mark_all_read") }}';
+        const CSRF_TOKEN      = '{{ csrf_token() }}';
+        const POLL_INTERVAL   = 60000;  // 60 seconds
+
+        const badge    = document.getElementById('notif-count-badge');
+        const listEl   = document.getElementById('notif-list');
+        const markAllBtn = document.getElementById('mark-all-read-btn');
+
+        function updateBadge(count) {
+            if (count > 0) {
+                badge.textContent = count > 99 ? '99+' : count;
+                badge.classList.remove('d-none');
+            } else {
+                badge.textContent = '';
+                badge.classList.add('d-none');
+            }
+        }
+
+        function renderNotifications(notifications) {
+            if (!notifications.length) {
+                listEl.innerHTML = '<div class="notif-empty"><i class="bi bi-check2-circle me-1"></i>You\'re all caught up!</div>';
+                return;
+            }
+
+            listEl.innerHTML = notifications.map(n => `
+                <a href="${n.link || '#'}"
+                   class="d-block text-decoration-none text-dark notif-item px-3 py-2 border-bottom ${n.is_read ? '' : 'unread'}"
+                   data-notif-id="${n.id}"
+                   data-link="${n.link || ''}">
+                    <div class="notif-title">${escapeHtml(n.title)}</div>
+                    <div class="notif-body">${escapeHtml(n.body)}</div>
+                    <div class="notif-time">${escapeHtml(n.created_at)}</div>
+                </a>
+            `).join('');
+
+            // Mark as read on click
+            listEl.querySelectorAll('.notif-item').forEach(el => {
+                el.addEventListener('click', function (e) {
+                    const id   = this.dataset.notifId;
+                    const link = this.dataset.link;
+                    e.preventDefault();
+                    markRead(id, () => {
+                        this.classList.remove('unread');
+                        if (link) window.location.href = link;
+                    });
+                });
+            });
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;')
+                      .replace(/</g, '&lt;')
+                      .replace(/>/g, '&gt;')
+                      .replace(/"/g, '&quot;');
+        }
+
+        function fetchNotifications() {
+            fetch(FEED_URL, { credentials: 'same-origin' })
+                .then(r => r.json())
+                .then(data => {
+                    updateBadge(data.unread_count);
+                    // Only re-render if dropdown is open to avoid disrupting user
+                    const dropdownEl = document.getElementById('notifDropdown');
+                    const isOpen = dropdownEl.getAttribute('aria-expanded') === 'true';
+                    if (isOpen) renderNotifications(data.notifications);
+                    // Store for rendering when opened
+                    window._jqcNotifications = data.notifications;
+                })
+                .catch(() => {}); // Silently fail — non-critical
+        }
+
+        function markRead(id, callback) {
+            fetch(`${MARK_READ_BASE}${id}/mark-read`, {
+                method:  'POST',
+                headers: { 'X-CSRFToken': CSRF_TOKEN, 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+            })
+            .then(r => r.json())
+            .then(() => { if (callback) callback(); fetchNotifications(); })
+            .catch(() => { if (callback) callback(); });
+        }
+
+        // Render stored notifications when dropdown opens
+        document.getElementById('notifDropdown').addEventListener('show.bs.dropdown', function () {
+            if (window._jqcNotifications) {
+                renderNotifications(window._jqcNotifications);
+            } else {
+                fetchNotifications();
+            }
+        });
+
+        // Mark all read button
+        markAllBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            fetch(MARK_ALL_URL, {
+                method:  'POST',
+                headers: { 'X-CSRFToken': CSRF_TOKEN },
+                credentials: 'same-origin',
+            })
+            .then(r => r.json())
+            .then(() => {
+                updateBadge(0);
+                // Mark all items visually as read
+                listEl.querySelectorAll('.notif-item.unread').forEach(el => el.classList.remove('unread'));
+                if (window._jqcNotifications) {
+                    window._jqcNotifications.forEach(n => n.is_read = true);
+                }
+            })
+            .catch(() => {});
+        });
+
+        // Initial fetch + periodic polling
+        fetchNotifications();
+        setInterval(fetchNotifications, POLL_INTERVAL);
+    })();
+    </script>
+    {% endif %}
 </body>
 </html>

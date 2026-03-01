@@ -15,6 +15,7 @@ from app.models.user import User
 from app.utils.forms import StartInspectionForm, IssueForm
 from app.utils.decorators import supervisor_required
 from app.utils.pdf_export import generate_inspection_pdf
+from app.utils.notifications import notify
 
 bp = Blueprint('inspections', __name__, url_prefix='/inspections')
 
@@ -308,6 +309,29 @@ def execute(inspection_id):
             _save_responses(inspection, responses)
             db.session.commit()
 
+            # ── Notify supervisors/admins that an inspection was completed ──
+            supervisors = User.query.filter(
+                User.role.in_(['admin', 'supervisor'])
+            ).all()
+            inspection_link = url_for('inspections.view', inspection_id=inspection.id)
+            score_display = f'{score:.1f}%' if score is not None else 'N/A'
+            for supervisor in supervisors:
+                if supervisor.id != current_user.id:
+                    notify(
+                        recipient     = supervisor,
+                        title         = f'Inspection #{inspection.id} Completed',
+                        body          = (
+                            f'{current_user.username} completed an inspection at '
+                            f'{inspection.facility.name} using the '
+                            f'"{inspection.template.name}" template. '
+                            f'Overall score: {score_display}.'
+                        ),
+                        link          = inspection_link,
+                        inspection_id = inspection.id,
+                        send_email    = True,
+                    )
+            db.session.commit()  # Commit notifications
+
             flash('Inspection submitted successfully!', 'success')
             return redirect(url_for('inspections.view', inspection_id=inspection_id))
 
@@ -411,6 +435,31 @@ def flag_issue(inspection_id):
             inspection.status = 'flagged'
 
         db.session.commit()
+        current_app.logger.info(
+            'ISSUE FLAGGED | issue_id=%s | inspection_id=%s | severity=%s | assigned_to=%s | by=%s',
+            issue.id, inspection_id, issue.severity, issue.assigned_to, current_user.username
+        )
+
+        # ── Notify the assignee of the flagged issue ─────────────────────
+        if issue.assigned_to:
+            assignee = User.query.get(issue.assigned_to)
+            if assignee and assignee.id != current_user.id:
+                notify(
+                    recipient     = assignee,
+                    title         = f'New Issue #{issue.id} Assigned to You',
+                    body          = (
+                        f'A {issue.severity.title()}-severity issue was flagged during '
+                        f'inspection #{inspection_id} at {inspection.facility.name} '
+                        f'and assigned to you. '
+                        f'Description: {issue.description[:120]}'
+                        f'{"…" if len(issue.description) > 120 else ""}'
+                    ),
+                    link          = url_for('issues.view', issue_id=issue.id),
+                    issue_id      = issue.id,
+                    send_email    = True,
+                )
+                db.session.commit()  # Commit notification
+
         flash('Issue logged successfully.', 'success')
         return redirect(url_for('inspections.execute', inspection_id=inspection_id))
 

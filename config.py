@@ -44,11 +44,16 @@ class Config:
     SESSION_COOKIE_SAMESITE = 'Lax'
 
     # ── Mail ────────────────────────────────────────────────────────────────
-    MAIL_SERVER   = os.environ.get('MAIL_SERVER')
-    MAIL_PORT     = int(os.environ.get('MAIL_PORT') or 587)
-    MAIL_USE_TLS  = os.environ.get('MAIL_USE_TLS', 'true').lower() in ('true', 'on', '1')
-    MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
-    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
+    MAIL_SERVER          = os.environ.get('MAIL_SERVER')
+    MAIL_PORT            = int(os.environ.get('MAIL_PORT') or 587)
+    MAIL_USE_TLS         = os.environ.get('MAIL_USE_TLS', 'true').lower() in ('true', 'on', '1')
+    MAIL_USERNAME        = os.environ.get('MAIL_USERNAME')
+    MAIL_PASSWORD        = os.environ.get('MAIL_PASSWORD')
+    MAIL_DEFAULT_SENDER  = os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@janitorialqc.local')
+
+    # ── Application base URL (used in email "View Details" links) ───────────
+    # Set this to your production domain, e.g. https://qc.yourcompany.com
+    APP_BASE_URL = os.environ.get('APP_BASE_URL', '')
 
 
 class DevelopmentConfig(Config):

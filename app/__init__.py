@@ -31,10 +31,29 @@ def create_app(config_name='default'):
     app.jinja_env.globals['csrf_token'] = generate_csrf
     app.jinja_env.globals['enumerate']  = enumerate
 
+    # ── Inject unread notification count into every template context ──────
+    # This powers the red badge on the navbar bell icon without requiring
+    # individual routes to pass the count manually.
+    from flask_login import current_user
+
+    @app.context_processor
+    def inject_notification_count():
+        try:
+            if current_user.is_authenticated:
+                from app.models.notification import Notification
+                count = Notification.query.filter_by(
+                    user_id=current_user.id, is_read=False
+                ).count()
+                return {'unread_notification_count': count}
+        except Exception:
+            pass
+        return {'unread_notification_count': 0}
+
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
     from app.routes import auth, dashboard, inspections, templates, reports, facilities
-    from app.routes import issues  # Phase 3
+    from app.routes import issues          # Phase 3
+    from app.routes import notifications   # Notification system
 
     app.register_blueprint(auth.bp)
     app.register_blueprint(dashboard.bp)
@@ -43,6 +62,7 @@ def create_app(config_name='default'):
     app.register_blueprint(reports.bp)
     app.register_blueprint(facilities.bp)
     app.register_blueprint(issues.bp)
+    app.register_blueprint(notifications.bp)
 
     # ── Error handler: 413 Request Entity Too Large ───────────────────────
     # Nginx can return 413 before Flask sees the request; this handler covers

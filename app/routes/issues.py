@@ -8,6 +8,7 @@ from app.models.facility import Facility, Area
 from app.models.user import User
 from app.utils.forms import IssueForm, IssueUpdateForm
 from app.utils.decorators import supervisor_required
+from app.utils.notifications import notify
 
 bp = Blueprint('issues', __name__, url_prefix='/issues')
 
@@ -59,6 +60,9 @@ def view(issue_id):
     form.status.data = form.status.data or issue.status
 
     if form.validate_on_submit():
+        old_status      = issue.status
+        old_assigned_to = issue.assigned_to
+
         issue.status = form.status.data
 
         # Only admin/supervisor can reassign; inspectors can only update status
@@ -100,6 +104,79 @@ def view(issue_id):
             'ISSUE UPDATED | id=%s | status=%s | result_photos_added=%s | comment=%s | updated_by=%s',
             issue.id, issue.status, len(new_photos), bool(comment_body), current_user.username
         )
+
+        # ── Notifications ────────────────────────────────────────────────
+        issue_link = url_for('issues.view', issue_id=issue.id)
+        new_assigned_to = issue.assigned_to
+
+        # 1. Notify the assignee when status changes
+        if old_status != issue.status and new_assigned_to:
+            assignee = User.query.get(new_assigned_to)
+            if assignee and assignee.id != current_user.id:
+                notify(
+                    recipient     = assignee,
+                    title         = f'Issue #{issue.id} Status Updated',
+                    body          = (
+                        f'Issue in {issue.area.name} was updated from '
+                        f'"{old_status.replace("_", " ").title()}" to '
+                        f'"{issue.status.replace("_", " ").title()}" '
+                        f'by {current_user.username}.'
+                    ),
+                    link          = issue_link,
+                    issue_id      = issue.id,
+                    send_email    = True,
+                )
+
+        # 2. Notify newly assigned user when the assignee changes
+        if (old_assigned_to != new_assigned_to) and new_assigned_to:
+            new_assignee = User.query.get(new_assigned_to)
+            if new_assignee and new_assignee.id != current_user.id:
+                notify(
+                    recipient     = new_assignee,
+                    title         = f'Issue #{issue.id} Assigned to You',
+                    body          = (
+                        f'You have been assigned Issue #{issue.id} '
+                        f'({issue.severity.title()} severity) in {issue.area.name}. '
+                        f'Current status: {issue.status.replace("_", " ").title()}.'
+                    ),
+                    link          = issue_link,
+                    issue_id      = issue.id,
+                    send_email    = True,
+                )
+
+        # 3. Notify the previously assigned user when unassigned
+        if old_assigned_to and old_assigned_to != new_assigned_to:
+            old_assignee = User.query.get(old_assigned_to)
+            if old_assignee and old_assignee.id != current_user.id:
+                notify(
+                    recipient     = old_assignee,
+                    title         = f'Issue #{issue.id} Unassigned',
+                    body          = (
+                        f'You have been removed from Issue #{issue.id} '
+                        f'in {issue.area.name} by {current_user.username}.'
+                    ),
+                    link          = issue_link,
+                    issue_id      = issue.id,
+                    send_email    = True,
+                )
+
+        # 4. Notify the assignee when a comment is added (if not the commenter)
+        if comment_body and new_assigned_to:
+            commentee = User.query.get(new_assigned_to)
+            if commentee and commentee.id != current_user.id:
+                notify(
+                    recipient     = commentee,
+                    title         = f'New Comment on Issue #{issue.id}',
+                    body          = (
+                        f'{current_user.username} added a comment on Issue #{issue.id}: '
+                        f'"{comment_body[:120]}{"…" if len(comment_body) > 120 else ""}"'
+                    ),
+                    link          = issue_link,
+                    issue_id      = issue.id,
+                    send_email    = True,
+                )
+
+        db.session.commit()  # Commit notifications
         flash('Issue updated.', 'success')
         return redirect(url_for('issues.view', issue_id=issue_id))
 
@@ -134,6 +211,30 @@ def create():
         )
         db.session.add(issue)
         db.session.commit()
+        current_app.logger.info(
+            'ISSUE CREATED | id=%s | severity=%s | area_id=%s | assigned_to=%s | created_by=%s',
+            issue.id, issue.severity, issue.area_id, issue.assigned_to, current_user.username
+        )
+
+        # ── Notify the assignee of the new issue ────────────────────────
+        if issue.assigned_to:
+            assignee = User.query.get(issue.assigned_to)
+            if assignee and assignee.id != current_user.id:
+                notify(
+                    recipient  = assignee,
+                    title      = f'New Issue #{issue.id} Assigned to You',
+                    body       = (
+                        f'A new {issue.severity.title()}-severity issue has been logged '
+                        f'in {issue.area.name} and assigned to you. '
+                        f'Description: {issue.description[:120]}'
+                        f'{"…" if len(issue.description) > 120 else ""}'
+                    ),
+                    link       = url_for('issues.view', issue_id=issue.id),
+                    issue_id   = issue.id,
+                    send_email = True,
+                )
+                db.session.commit()  # Commit notification
+
         flash('Issue created.', 'success')
         return redirect(url_for('issues.index'))
 
