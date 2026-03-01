@@ -234,8 +234,13 @@ def _score_banner(inspection):
 # ── Form fields section ───────────────────────────────────────────────────────
 
 def _star_string(score, max_stars=5):
+    """Return a star string using only the filled ★ glyph.
+    Hollow ☆ is not supported by Helvetica and renders as a box.
+    Unselected stars are rendered as grey ★ via ReportLab XML markup.
+    Returns a plain string for canvas use; use _star_markup() for Paragraph.
+    """
     filled = min(int(score), max_stars)
-    return '★' * filled + '☆' * (max_stars - filled)
+    return '★' * filled + '★' * (max_stars - filled)
 
 
 _SKIP_TYPES = {'button_submit', 'button_print', 'button_email'}
@@ -285,7 +290,7 @@ def _form_fields_section(form_fields, form_data, static_folder):
     # A row is visible if it contains a text/textarea/label field, OR any other
     # field type that has a non-empty value.  This is used to suppress section
     # banners whose every subordinate row is empty.
-    _ALWAYS_SHOW_PRE = {'text', 'textarea', 'label'}
+    _ALWAYS_SHOW_PRE = {'label'}
 
     def _row_has_content(fields_in_row):
         for f in fields_in_row:
@@ -295,12 +300,13 @@ def _form_fields_section(form_fields, form_data, static_folder):
             if ft in _ALWAYS_SHOW_PRE:
                 return True
             if ft == 'rating'        and str(v).isdigit() and int(v) > 0:  return True
-            if ft == 'checkbox'      and v == 'yes':                        return True
+            if ft == 'checkbox'      and v in ('yes','true'):               return True
             if ft == 'checkbox_group'and isinstance(v, list) and v:        return True
-            if ft == 'image'         and v:                                 return True
+            if ft == 'image'         and v and os.path.exists(os.path.join(static_folder, v)): return True
             if ft == 'signature'     and v and str(v).startswith('data:'): return True
             if ft == 'table'         and isinstance(v, list) and v:        return True
             if ft in ('number','date','email','radio','select') and v:      return True
+            if ft in ('text','textarea')                         and v:      return True
         return False
 
     # Build a set of section-trigger row numbers that have visible content somewhere
@@ -344,9 +350,6 @@ def _form_fields_section(form_fields, form_data, static_folder):
         cells      = []
         col_widths = []
 
-        # Types that are always shown regardless of value
-        _ALWAYS_SHOW = {'text', 'textarea', 'label'}
-
         for field in fields_in_row:
             ftype    = field.get('type', '')
             col_span = field.get('colSpan', 1)
@@ -370,57 +373,55 @@ def _form_fields_section(form_fields, form_data, static_folder):
             val = form_data.get(fid, '')
             lbl = field.get('label', '')
 
-            # ── Skip fields with no value unless type is always-shown ─────────
-            if ftype not in _ALWAYS_SHOW:
+            # ── Skip fields with no meaningful value ──────────────────────────
+            # Returns True if the field should be hidden from the PDF.
+            def _skip(ftype, val):
                 if ftype == 'rating':
-                    if not str(val).isdigit() or int(val) == 0:
-                        continue
-                elif ftype == 'checkbox':
-                    if val != 'yes':
-                        continue
-                elif ftype == 'checkbox_group':
-                    if not val or not isinstance(val, list) or len(val) == 0:
-                        continue
-                elif ftype == 'image':
-                    if not val:
-                        continue
-                elif ftype == 'signature':
-                    if not val or not str(val).startswith('data:'):
-                        continue
-                elif ftype == 'table':
-                    if not val or not isinstance(val, list) or len(val) == 0:
-                        continue
-                elif ftype in ('number', 'date', 'email', 'radio', 'select'):
-                    if not val:
-                        continue
+                    return not str(val).isdigit() or int(val) == 0
+                if ftype == 'image':
+                    img_path = os.path.join(static_folder, val) if val else ''
+                    return not val or not os.path.exists(img_path)
+                if ftype == 'signature':
+                    return not val or not str(val).startswith('data:')
+                if ftype == 'checkbox':
+                    # stored as 'true'/'false' by _collect_form_responses
+                    return val not in ('yes', 'true')
+                if ftype == 'checkbox_group':
+                    return not val or not isinstance(val, list) or len(val) == 0
+                if ftype == 'table':
+                    return not val or not isinstance(val, list) or len(val) == 0
+                # All remaining input types (text, textarea, number, date,
+                # email, radio, select, and any future types)
+                return not val
+
+            if _skip(ftype, val):
+                continue
 
             lbl_p = Paragraph(lbl, STYLES['FieldLabel'])
 
             # ── Value content ────────────────────────────────────────────────
             if ftype == 'rating':
                 score_int = int(val)
-                stars = (f'<font color="#f59e0b">{"★" * score_int}'
-                         f'{"☆" * (5 - score_int)}</font>'
-                         f'  <font color="#64748b">{score_int}/5</font>')
+                # Use ★ for both filled and unfilled — ☆ is unsupported in
+                # Helvetica and renders as a solid box. Grey colour for unfilled.
+                filled_stars = '<font color="#f59e0b">' + ('★' * score_int) + '</font>'
+                empty_stars  = ('<font color="#d1d5db">' + ('★' * (5 - score_int)) + '</font>'
+                               if score_int < 5 else '')
+                stars = filled_stars + empty_stars + f'  <font color="#64748b">{score_int}/5</font>'
                 val_p = Paragraph(stars, ParagraphStyle(
                     'rv', fontName='Helvetica', fontSize=9, leading=12))
 
             elif ftype == 'image':
+                # File existence already verified in the skip gate above
                 img_path = os.path.join(static_folder, val)
-                if os.path.exists(img_path):
-                    try:
-                        val_p = RLImage(img_path,
-                                        width=min(cell_w - 12, 1.4 * inch),
-                                        height=1.0 * inch,
-                                        kind='proportional')
-                    except Exception:
-                        val_p = Paragraph(
-                            '<i><font color="#94a3b8">Photo error</font></i>',
-                            STYLES['FieldValue'])
-                else:
-                    val_p = Paragraph(
-                        '<i><font color="#94a3b8">File not found</font></i>',
-                        STYLES['FieldValue'])
+                try:
+                    val_p = RLImage(img_path,
+                                    width=min(cell_w - 12, 1.4 * inch),
+                                    height=1.0 * inch,
+                                    kind='proportional')
+                except Exception:
+                    # Could not load image — skip this cell entirely
+                    continue
 
             elif ftype == 'signature':
                 val_p = Paragraph('[Signature captured]', STYLES['FieldValue'])

@@ -448,6 +448,17 @@ def export_pdf(inspection_id):
 
     static_folder = os.path.join(current_app.root_path, 'static')
 
+    # Log image field values to help diagnose missing-photo issues in PDF export
+    for field in form_fields:
+        if field.get('type') == 'image':
+            fid = str(field.get('id', ''))
+            val = form_data.get(fid, '')
+            resolved = os.path.join(static_folder, val) if val else ''
+            current_app.logger.info(
+                'PDF export image field | fid=%s | val=%r | exists=%s | resolved=%r',
+                fid, val, os.path.exists(resolved) if resolved else False, resolved
+            )
+
     pdf_bytes = generate_inspection_pdf(
         inspection   = inspection,
         form_fields  = form_fields,
