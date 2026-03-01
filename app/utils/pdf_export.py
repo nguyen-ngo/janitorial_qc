@@ -473,7 +473,7 @@ def _form_fields_section(form_fields, form_data, static_folder):
         if not cells:
             continue
 
-        row_tbl = Table([cells], colWidths=col_widths)
+        row_tbl = Table([cells], colWidths=col_widths, hAlign='LEFT')
         row_tbl.setStyle(TableStyle([
             ('VALIGN',       (0, 0), (-1, -1), 'TOP'),
             ('LEFTPADDING',  (0, 0), (-1, -1), 2),
