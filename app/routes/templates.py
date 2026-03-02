@@ -5,6 +5,7 @@ from app.models.inspection import InspectionTemplate, ChecklistItem
 from app.utils.forms import InspectionTemplateForm, ChecklistItemForm
 from app.utils.decorators import supervisor_required
 import json
+from app.utils.audit import log_action, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE
 
 bp = Blueprint('templates', __name__, url_prefix='/templates')
 
@@ -35,6 +36,8 @@ def create_template():
         )
         db.session.add(template)
         db.session.commit()
+        log_action(ACTION_CREATE, 'Template', template.id, template.name,
+                   f'frequency={template.frequency}')
 
         flash(f'Template "{template.name}" created successfully.', 'success')
         return redirect(url_for('templates.form_editor', template_id=template.id))
@@ -66,6 +69,8 @@ def edit_template(template_id):
         template.description = form.description.data
         template.frequency = form.frequency.data
         db.session.commit()
+        log_action(ACTION_UPDATE, 'Template', template.id, template.name,
+                   f'frequency={template.frequency}')
         flash(f'Template "{template.name}" updated successfully.', 'success')
         return redirect(url_for('templates.view_template', template_id=template.id))
 
@@ -118,8 +123,10 @@ def delete_template(template_id):
         return redirect(url_for('templates.index'))
 
     template_name = template.name
+    template_id_snap = template.id
     db.session.delete(template)
     db.session.commit()
+    log_action(ACTION_DELETE, 'Template', template_id_snap, template_name)
 
     flash(f'Template "{template_name}" deleted successfully.', 'success')
     return redirect(url_for('templates.index'))
@@ -159,6 +166,8 @@ def duplicate_template(template_id):
         new_tpl.form_schema = src.form_schema
 
     db.session.commit()
+    log_action(ACTION_CREATE, 'Template', new_tpl.id, new_tpl.name,
+               f'duplicated_from={src.id}; frequency={new_tpl.frequency}')
 
     flash(f'Template "{src.name}" duplicated successfully.', 'success')
     return redirect(url_for('templates.index'))

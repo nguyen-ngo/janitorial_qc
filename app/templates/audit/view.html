@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Audit Entry #{{ entry.id }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-center">
+    <div class="col">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-1">
+                <li class="breadcrumb-item">
+                    <a href="{{ url_for('audit.index') }}">Audit Trail</a>
+                </li>
+                <li class="breadcrumb-item active">Entry #{{ entry.id }}</li>
+            </ol>
+        </nav>
+        <h2 class="mb-0"><i class="bi bi-shield-check"></i> Audit Entry #{{ entry.id }}</h2>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('audit.index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Back to Audit Trail
+        </a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light fw-semibold">
+                <i class="bi bi-info-circle me-1"></i>Event Details
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4 text-muted">Action</dt>
+                    <dd class="col-sm-8">
+                        <span class="badge fs-6
+                            {% if entry.action == 'CREATE' %}bg-success
+                            {% elif entry.action == 'UPDATE' %}bg-primary
+                            {% elif entry.action == 'DELETE' %}bg-danger
+                            {% elif entry.action in ('LOGIN','LOGOUT') %}bg-secondary
+                            {% elif entry.action == 'EXPORT' %}bg-warning text-dark
+                            {% else %}bg-light text-dark{% endif %}">
+                            {{ entry.action }}
+                        </span>
+                    </dd>
+
+                    <dt class="col-sm-4 text-muted">Entity Type</dt>
+                    <dd class="col-sm-8">{{ entry.entity_type }}</dd>
+
+                    <dt class="col-sm-4 text-muted">Entity ID</dt>
+                    <dd class="col-sm-8">
+                        {% if entry.entity_id %}#{{ entry.entity_id }}{% else %}<span class="text-muted">—</span>{% endif %}
+                    </dd>
+
+                    <dt class="col-sm-4 text-muted">Label</dt>
+                    <dd class="col-sm-8">{{ entry.entity_label or '—' }}</dd>
+
+                    <dt class="col-sm-4 text-muted">Details</dt>
+                    <dd class="col-sm-8">
+                        {% if entry.details %}
+                            <code class="text-break">{{ entry.details }}</code>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light fw-semibold">
+                <i class="bi bi-person-circle me-1"></i>Actor &amp; Context
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4 text-muted">Username</dt>
+                    <dd class="col-sm-8">
+                        <strong>{{ entry.username }}</strong>
+                        {% if entry.user_id %}
+                            <span class="text-muted small">(ID #{{ entry.user_id }})</span>
+                        {% else %}
+                            <span class="badge bg-secondary ms-1">Deleted</span>
+                        {% endif %}
+                    </dd>
+
+                    <dt class="col-sm-4 text-muted">Role at Time</dt>
+                    <dd class="col-sm-8">
+                        <span class="badge bg-{% if entry.user_role == 'admin' %}danger{% elif entry.user_role == 'supervisor' %}warning{% else %}info{% endif %}">
+                            {{ entry.user_role | title }}
+                        </span>
+                    </dd>
+
+                    <dt class="col-sm-4 text-muted">Timestamp</dt>
+                    <dd class="col-sm-8">
+                        <span class="font-monospace">
+                            {{ entry.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                        </span>
+                        <small class="text-muted ms-1">Eastern Time</small>
+                    </dd>
+
+                    <dt class="col-sm-4 text-muted">IP Address</dt>
+                    <dd class="col-sm-8">
+                        <code>{{ entry.ip_address or '—' }}</code>
+                    </dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

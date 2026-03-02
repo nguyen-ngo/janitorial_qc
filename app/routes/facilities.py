@@ -1,9 +1,10 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
-from flask_login import login_required
+from flask_login import login_required, current_user
 from app import db
 from app.models.facility import Facility, Area
 from app.utils.forms import FacilityForm, AreaForm
 from app.utils.decorators import supervisor_required, admin_required
+from app.utils.audit import log_action, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE
 
 bp = Blueprint('facilities', __name__, url_prefix='/facilities')
 
@@ -30,7 +31,8 @@ def create_facility():
         
         db.session.add(facility)
         db.session.commit()
-        
+        log_action(ACTION_CREATE, 'Facility', facility.id, facility.name,
+                   f'contact={facility.contact_person or ""}; active={facility.active}')
         flash(f'Facility "{facility.name}" created successfully.', 'success')
         return redirect(url_for('facilities.view_facility', facility_id=facility.id))
     
@@ -58,6 +60,8 @@ def edit_facility(facility_id):
         facility.active = form.active.data
         
         db.session.commit()
+        log_action(ACTION_UPDATE, 'Facility', facility.id, facility.name,
+                   f'active={facility.active}')
         flash(f'Facility "{facility.name}" updated successfully.', 'success')
         return redirect(url_for('facilities.view_facility', facility_id=facility.id))
     
@@ -74,9 +78,10 @@ def delete_facility(facility_id):
         return redirect(url_for('facilities.view_facility', facility_id=facility.id))
     
     facility_name = facility.name
+    facility_id_snap = facility.id
     db.session.delete(facility)
     db.session.commit()
-    
+    log_action(ACTION_DELETE, 'Facility', facility_id_snap, facility_name)
     flash(f'Facility "{facility_name}" has been permanently deleted.', 'success')
     return redirect(url_for('facilities.list_facilities'))
 
@@ -100,7 +105,8 @@ def create_area(facility_id):
         
         db.session.add(area)
         db.session.commit()
-        
+        log_action(ACTION_CREATE, 'Area', area.id, area.name,
+                   f'facility={facility.name}; type={area.area_type or ""}')
         flash(f'Area "{area.name}" created successfully.', 'success')
         return redirect(url_for('facilities.view_facility', facility_id=facility.id))
     
@@ -122,6 +128,8 @@ def edit_area(area_id):
         area.facility_id = form.facility_id.data
         
         db.session.commit()
+        log_action(ACTION_UPDATE, 'Area', area.id, area.name,
+                   f'facility_id={area.facility_id}; type={area.area_type or ""}')
         flash(f'Area "{area.name}" updated successfully.', 'success')
         return redirect(url_for('facilities.view_facility', facility_id=area.facility_id))
     
@@ -139,8 +147,9 @@ def delete_area(area_id):
         return redirect(url_for('facilities.view_facility', facility_id=facility_id))
     
     area_name = area.name
+    area_id_snap = area.id
     db.session.delete(area)
     db.session.commit()
-    
+    log_action(ACTION_DELETE, 'Area', area_id_snap, area_name)
     flash(f'Area "{area_name}" deleted successfully.', 'success')
     return redirect(url_for('facilities.view_facility', facility_id=facility_id))

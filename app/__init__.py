@@ -96,6 +96,7 @@ def create_app(config_name='default'):
     from app.routes import auth, dashboard, inspections, templates, reports, facilities
     from app.routes import issues          # Phase 3
     from app.routes import notifications   # Notification system
+    from app.routes import audit           # Audit Trail
 
     app.register_blueprint(auth.bp)
     app.register_blueprint(dashboard.bp)
@@ -105,6 +106,7 @@ def create_app(config_name='default'):
     app.register_blueprint(facilities.bp)
     app.register_blueprint(issues.bp)
     app.register_blueprint(notifications.bp)
+    app.register_blueprint(audit.bp)
 
     # ── Error handler: 413 Request Entity Too Large ───────────────────────
     # Nginx can return 413 before Flask sees the request; this handler covers

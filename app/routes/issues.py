@@ -13,6 +13,7 @@ from app.models.notification import (
 from app.utils.forms import IssueForm, IssueUpdateForm
 from app.utils.decorators import supervisor_required
 from app.utils.notifications import notify
+from app.utils.audit import log_action, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE
 
 bp = Blueprint('issues', __name__, url_prefix='/issues')
 
@@ -237,6 +238,9 @@ def view(issue_id):
             )
 
         db.session.commit()  # Commit all notifications
+        log_action(ACTION_UPDATE, 'Issue', issue.id,
+                   f'#{issue.id} in {issue.area.name}',
+                   f'status={issue.status}; assigned_to={issue.assigned_to}')
         flash('Issue updated.', 'success')
         return redirect(url_for('issues.view', issue_id=issue_id))
 
@@ -324,6 +328,9 @@ def create():
             'ISSUE CREATED | id=%s | severity=%s | area_id=%s | assigned_to=%s | created_by=%s',
             issue.id, issue.severity, issue.area_id, issue.assigned_to, current_user.username
         )
+        log_action(ACTION_CREATE, 'Issue', issue.id,
+                   f'#{issue.id} {issue.severity} in {issue.area.name}',
+                   f'severity={issue.severity}; assigned_to={issue.assigned_to}')
 
         if issue.assigned_to:
             assignee = User.query.get(issue.assigned_to)

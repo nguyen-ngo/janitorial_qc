@@ -6,6 +6,7 @@ from app.models.user import User
 from app.utils.forms import LoginForm, UserForm, ProfileForm
 from app.utils.decorators import admin_required
 import logging
+from app.utils.audit import log_action, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE, ACTION_LOGIN, ACTION_LOGOUT
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,7 @@ def login():
             login_user(user, remember=form.remember_me.data)
             # Use validated next URL — never redirect blindly to request.args['next']
             next_page = _safe_next(request.args.get('next'))
+            log_action(ACTION_LOGIN, 'User', user.id, user.username)
             flash(f'Welcome back, {user.username}!', 'success')
             return redirect(next_page)
         else:
@@ -53,6 +55,7 @@ def login():
 @bp.route('/logout')
 @login_required
 def logout():
+    log_action(ACTION_LOGOUT, 'User', current_user.id, current_user.username)
     logout_user()
     flash('Successfully logged out.', 'success')
     return redirect(url_for('auth.login'))
@@ -78,6 +81,8 @@ def profile():
         db.session.commit()
         logger.info('AUTH | profile_update | user_id=%s username=%s email=%s',
                     current_user.id, current_user.username, current_user.email)
+        log_action(ACTION_UPDATE, 'User', current_user.id, current_user.username,
+                   'self-service profile update')
         flash('Profile updated successfully.', 'success')
         return redirect(url_for('auth.profile'))
 
@@ -134,6 +139,8 @@ def create_user():
         db.session.commit()
         logger.info('AUTH | user_create | admin_id=%s admin=%s new_user=%s role=%s',
                     current_user.id, current_user.username, user.username, user.role)
+        log_action(ACTION_CREATE, 'User', user.id, user.username,
+                   f'role={user.role}; email={user.email}')
         flash(f'User {user.username} created successfully.', 'success')
         return redirect(url_for('auth.list_users'))
 
@@ -158,6 +165,8 @@ def edit_user(user_id):
         db.session.commit()
         logger.info('AUTH | user_edit | admin_id=%s admin=%s target_user_id=%s target_user=%s',
                     current_user.id, current_user.username, user.id, user.username)
+        log_action(ACTION_UPDATE, 'User', user.id, user.username,
+                   f'role={user.role}; email={user.email}')
         flash(f'User {user.username} updated successfully.', 'success')
         return redirect(url_for('auth.list_users'))
 
@@ -186,9 +195,11 @@ def delete_user(user_id):
         return redirect(url_for('auth.list_users'))
 
     username = user.username
+    user_id   = user.id
     db.session.delete(user)
     db.session.commit()
     logger.info('AUTH | user_delete | admin_id=%s admin=%s deleted_user=%s',
                 current_user.id, current_user.username, username)
+    log_action(ACTION_DELETE, 'User', user_id, username)
     flash(f'User {username} deleted successfully.', 'success')
     return redirect(url_for('auth.list_users'))

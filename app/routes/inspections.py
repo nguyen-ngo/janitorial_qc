@@ -17,6 +17,7 @@ from app.utils.decorators import supervisor_required
 from app.utils.pdf_export import generate_inspection_pdf
 from app.utils.notifications import notify
 from app.models.notification import EVENT_INSPECTION_DONE, EVENT_ISSUE_ASSIGNED
+from app.utils.audit import log_action, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE, ACTION_EXPORT
 
 bp = Blueprint('inspections', __name__, url_prefix='/inspections')
 
@@ -233,6 +234,9 @@ def start():
         )
         db.session.add(inspection)
         db.session.commit()
+        log_action(ACTION_CREATE, 'Inspection', inspection.id,
+                   f'{inspection.template.name} @ {inspection.facility.name}',
+                   f'template_id={inspection.template_id}; facility_id={inspection.facility_id}')
 
         flash('Inspection started. Fill in the form below and submit when complete.', 'info')
         return redirect(url_for('inspections.execute', inspection_id=inspection.id))
@@ -333,6 +337,9 @@ def execute(inspection_id):
                         send_email    = True,
                     )
             db.session.commit()  # Commit notifications
+            log_action(ACTION_UPDATE, 'Inspection', inspection.id,
+                       f'{inspection.template.name} @ {inspection.facility.name}',
+                       f'status=completed; score={score}')
 
             flash('Inspection submitted successfully!', 'success')
             return redirect(url_for('inspections.view', inspection_id=inspection_id))
@@ -526,6 +533,9 @@ def export_pdf(inspection_id):
         'PDF export | inspection_id=%s | inspector=%s | by=%s',
         inspection.id, inspection.inspector.username, current_user.username
     )
+    log_action(ACTION_EXPORT, 'Inspection', inspection.id,
+               f'{inspection.template.name} @ {inspection.facility.name}',
+               f'format=pdf')
 
     return Response(
         pdf_bytes,
@@ -586,6 +596,9 @@ def delete(inspection_id):
         insp_id, facility_name, template_name,
         insp_date, inspector_name, current_user.username
     )
+    log_action(ACTION_DELETE, 'Inspection', insp_id,
+               f'{template_name} @ {facility_name}',
+               f'date={insp_date}; inspector={inspector_name}')
 
     flash(
         f'Inspection #{insp_id} ({template_name} — {facility_name}, {insp_date}) '
