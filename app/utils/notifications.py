@@ -1,74 +1,120 @@
-# app/routes/notifications.py
+"""
+app/utils/notifications.py
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+Central helper for creating in-app notifications and dispatching email alerts.
+"""
+
 import logging
-from flask import Blueprint, jsonify, request, abort
-from flask_login import login_required, current_user
-from app import db
+from flask import current_app, render_template_string
+from flask_mail import Message
+from app import db, mail
 from app.models.notification import Notification
 
 logger = logging.getLogger(__name__)
 
-bp = Blueprint('notifications', __name__, url_prefix='/notifications')
+_EMAIL_HTML = """\
+<!DOCTYPE html>
+<html>
+<body style="font-family:Arial,sans-serif;color:#333;max-width:600px;margin:auto;">
+  <h2 style="color:#0d6efd;">{{ title }}</h2>
+  <p>{{ body }}</p>
+  {% if link %}
+  <p>
+    <a href="{{ base_url }}{{ link }}"
+       style="background:#0d6efd;color:#fff;padding:10px 20px;
+              text-decoration:none;border-radius:4px;display:inline-block;">
+      View Details
+    </a>
+  </p>
+  {% endif %}
+  <hr style="border:none;border-top:1px solid #eee;margin-top:32px;">
+  <p style="font-size:12px;color:#888;">
+    Janitorial QC System — automated notification. Do not reply to this email.
+  </p>
+</body>
+</html>
+"""
+
+_EMAIL_TEXT = """\
+{{ title }}
+
+{{ body }}
+{% if link %}
+View: {{ base_url }}{{ link }}
+{% endif %}
+
+--
+Janitorial QC System — automated notification.
+"""
 
 
-@bp.route('/feed')
-@login_required
-def feed():
-    """Return the 20 most recent notifications for the current user as JSON.
-    Used by the navbar bell icon to populate the dropdown.
-    """
-    notifs = (
-        Notification.query
-        .filter_by(user_id=current_user.id)
-        .order_by(Notification.created_at.desc())
-        .limit(20)
-        .all()
+def notify(
+    recipient,
+    title: str,
+    body: str,
+    link: str = None,
+    issue_id: int = None,
+    inspection_id: int = None,
+    send_email: bool = True,
+):
+    """Create an in-app Notification record and optionally send an email."""
+    # ── 1. Persist in-app notification ─────────────────────────────────────
+    notif = Notification(
+        user_id       = recipient.id,
+        title         = title,
+        body          = body,
+        link          = link,
+        issue_id      = issue_id,
+        inspection_id = inspection_id,
+        is_read       = False,
     )
-    unread_count = Notification.query.filter_by(
-        user_id=current_user.id, is_read=False
-    ).count()
+    db.session.add(notif)
+    # NOTE: The caller is responsible for calling db.session.commit().
 
-    items = []
-    for n in notifs:
-        items.append({
-            'id':         n.id,
-            'title':      n.title,
-            'body':       n.body,
-            'link':       n.link,
-            'is_read':    n.is_read,
-            'created_at': n.created_at.strftime('%b %d, %Y %I:%M %p'),
-        })
-
-    return jsonify({'notifications': items, 'unread_count': unread_count})
-
-
-@bp.route('/<int:notif_id>/mark-read', methods=['POST'])
-@login_required
-def mark_read(notif_id):
-    """Mark a single notification as read."""
-    notif = Notification.query.get_or_404(notif_id)
-    if notif.user_id != current_user.id:
-        abort(403)
-    notif.is_read = True
-    db.session.commit()
     logger.info(
-        'NOTIFICATION READ | id=%s | user=%s',
-        notif_id, current_user.username,
+        'NOTIFICATION CREATED | user=%s | title=%s | issue_id=%s | inspection_id=%s',
+        recipient.username, title, issue_id, inspection_id,
     )
-    return jsonify({'ok': True})
 
+    # ── 2. Send email (best-effort) ─────────────────────────────────────────
+    if send_email and recipient.email and current_app.config.get('MAIL_SERVER'):
+        try:
+            base_url = current_app.config.get('APP_BASE_URL', '').rstrip('/')
 
-@bp.route('/mark-all-read', methods=['POST'])
-@login_required
-def mark_all_read():
-    """Mark all unread notifications for the current user as read."""
-    updated = (
-        Notification.query
-        .filter_by(user_id=current_user.id, is_read=False)
-        .update({'is_read': True})
-    )
-    db.session.commit()
-    logger.info(
-        'NOTIFICATIONS ALL READ | user=%s | count=%s',
-        current_user.username, updated,
-    )
-    return jsonify({'ok': True, 'marked': updated})
+            html_body = render_template_string(
+                _EMAIL_HTML,
+                title=title,
+                body=body,
+                link=link,
+                base_url=base_url,
+            )
+            text_body = render_template_string(
+                _EMAIL_TEXT,
+                title=title,
+                body=body,
+                link=link,
+                base_url=base_url,
+            )
+
+            sender = current_app.config.get(
+                'MAIL_DEFAULT_SENDER',
+                current_app.config.get('MAIL_USERNAME', 'noreply@janitorialqc.local'),
+            )
+
+            msg = Message(
+                subject    = f'[JQC] {title}',
+                sender     = sender,
+                recipients = [recipient.email],
+                body       = text_body,
+                html       = html_body,
+            )
+            mail.send(msg)
+            logger.info(
+                'NOTIFICATION EMAIL SENT | to=%s | subject=%s',
+                recipient.email, msg.subject,
+            )
+        except Exception as exc:
+            logger.error(
+                'NOTIFICATION EMAIL FAILED | to=%s | error=%s',
+                recipient.email, exc,
+            )
