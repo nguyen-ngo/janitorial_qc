@@ -5,6 +5,8 @@ from flask_migrate import Migrate
 from flask_mail import Mail
 from config import config
 import os
+import logging
+from logging.handlers import RotatingFileHandler
 
 db           = SQLAlchemy()
 login_manager = LoginManager()
@@ -24,6 +26,46 @@ def create_app(config_name='default'):
     login_manager.login_view         = 'auth.login'
     login_manager.login_message      = 'Please log in to access this page.'
     login_manager.login_message_category = 'info'
+
+    # ── Logging setup ────────────────────────────────────────────────────────
+    # Configure root logger so that logger.info/error calls in all modules
+    # (notifications.py, issues.py, etc.) actually write output.
+    # Writes to stdout (captured by journalctl/gunicorn) AND a rotating file.
+    if not app.debug or os.environ.get('LOG_TO_FILE'):
+        log_level = logging.INFO
+
+        formatter = logging.Formatter(
+            '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S',
+        )
+
+        # Stream handler — always on; journalctl captures stdout
+        stream_handler = logging.StreamHandler()
+        stream_handler.setLevel(log_level)
+        stream_handler.setFormatter(formatter)
+
+        # Rotating file handler — keeps 5 × 5 MB log files
+        log_dir  = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
+        os.makedirs(log_dir, exist_ok=True)
+        file_handler = RotatingFileHandler(
+            os.path.join(log_dir, 'jqc.log'),
+            maxBytes=5 * 1024 * 1024,
+            backupCount=5,
+        )
+        file_handler.setLevel(log_level)
+        file_handler.setFormatter(formatter)
+
+        # Apply to both the Flask app logger and the root logger so all
+        # getLogger(__name__) calls in sub-modules are captured.
+        app.logger.setLevel(log_level)
+        app.logger.addHandler(stream_handler)
+        app.logger.addHandler(file_handler)
+
+        root_logger = logging.getLogger()
+        root_logger.setLevel(log_level)
+        if not root_logger.handlers:
+            root_logger.addHandler(stream_handler)
+            root_logger.addHandler(file_handler)
 
     # Register csrf_token() as an app-wide Jinja2 global so templates that
     # render manual forms (no WTForms object) can still inject the CSRF token.

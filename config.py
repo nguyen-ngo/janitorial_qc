@@ -52,10 +52,17 @@ class Config:
     DIGEST_SECRET        = os.environ.get('DIGEST_SECRET')
 
     MAIL_SERVER   = os.environ.get('MAIL_SERVER')
-    MAIL_PORT     = int(os.environ.get('MAIL_PORT') or 587)
-    MAIL_USE_TLS  = os.environ.get('MAIL_USE_TLS', 'true').lower() in ('true', 'on', '1')
     MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
+
+    # ── SSL vs STARTTLS selection ────────────────────────────────────────────
+    # Port 465 = implicit SSL  → MAIL_USE_SSL=True,  MAIL_USE_TLS=False
+    # Port 587 = STARTTLS      → MAIL_USE_SSL=False, MAIL_USE_TLS=True
+    # The two flags are mutually exclusive; setting both True breaks Flask-Mail.
+    _mail_port    = int(os.environ.get('MAIL_PORT') or 587)
+    MAIL_PORT     = _mail_port
+    MAIL_USE_SSL  = _mail_port == 465
+    MAIL_USE_TLS  = not MAIL_USE_SSL   # STARTTLS only when NOT using implicit SSL
 
 
 class DevelopmentConfig(Config):
