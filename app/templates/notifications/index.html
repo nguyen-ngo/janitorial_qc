@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Notifications{% endblock %}
+
+{% block content %}
+<div class="row mb-3 align-items-center">
+  <div class="col">
+    <h4 class="mb-0">
+      <i class="bi bi-bell-fill text-primary me-2"></i>Notifications
+      {% if unread_count > 0 %}
+      <span class="badge bg-danger ms-1" style="font-size:.6rem;vertical-align:middle;">
+        {{ unread_count }} unread
+      </span>
+      {% endif %}
+    </h4>
+  </div>
+  <div class="col-auto d-flex gap-2">
+    <a href="{{ url_for('notifications.preferences') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-gear"></i> Preferences
+    </a>
+    {% if unread_count > 0 %}
+    <form method="post" action="{{ url_for('notifications.mark_all_read') }}" class="mb-0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-check2-all"></i> Mark all read
+      </button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{# ── Filter tabs ── #}
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item">
+    <a class="nav-link {% if filter_read == 'all' %}active{% endif %}"
+       href="{{ url_for('notifications.index', filter='all') }}">All</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if filter_read == 'unread' %}active{% endif %}"
+       href="{{ url_for('notifications.index', filter='unread') }}">Unread</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if filter_read == 'read' %}active{% endif %}"
+       href="{{ url_for('notifications.index', filter='read') }}">Read</a>
+  </li>
+</ul>
+
+{# ── Notification list ── #}
+{% if notifications.items %}
+<div class="card shadow-sm">
+  <ul class="list-group list-group-flush">
+    {% for n in notifications.items %}
+    <li class="list-group-item px-3 py-3
+               {% if not n.is_read %}list-group-item-light border-start border-primary border-3{% endif %}">
+      <div class="d-flex justify-content-between align-items-start">
+        <div class="flex-grow-1">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            {% if not n.is_read %}
+            <span class="badge bg-primary" style="font-size:.65rem;">New</span>
+            {% endif %}
+            <span class="fw-semibold" style="font-size:.9rem;">{{ n.title }}</span>
+          </div>
+          <p class="mb-1 text-secondary" style="font-size:.85rem;">{{ n.body }}</p>
+          <small class="text-muted">
+            <i class="bi bi-clock me-1"></i>{{ n.created_at.strftime('%b %d, %Y %I:%M %p') }}
+          </small>
+        </div>
+        <div class="d-flex gap-2 ms-3 flex-shrink-0">
+          {% if n.link %}
+          <a href="{{ n.link }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-arrow-right"></i> View
+          </a>
+          {% endif %}
+          {% if not n.is_read %}
+          <form method="post"
+                action="{{ url_for('notifications.mark_read', notif_id=n.id) }}"
+                class="mb-0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-secondary"
+                    title="Mark as read">
+              <i class="bi bi-check2"></i>
+            </button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+
+{# ── Pagination ── #}
+{% if notifications.pages > 1 %}
+<nav class="mt-3">
+  <ul class="pagination pagination-sm justify-content-center">
+    <li class="page-item {% if not notifications.has_prev %}disabled{% endif %}">
+      <a class="page-link"
+         href="{{ url_for('notifications.index', page=notifications.prev_num, filter=filter_read) }}">
+        &laquo; Prev
+      </a>
+    </li>
+    {% for p in notifications.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+      {% if p %}
+      <li class="page-item {% if p == notifications.page %}active{% endif %}">
+        <a class="page-link"
+           href="{{ url_for('notifications.index', page=p, filter=filter_read) }}">{{ p }}</a>
+      </li>
+      {% else %}
+      <li class="page-item disabled"><span class="page-link">…</span></li>
+      {% endif %}
+    {% endfor %}
+    <li class="page-item {% if not notifications.has_next %}disabled{% endif %}">
+      <a class="page-link"
+         href="{{ url_for('notifications.index', page=notifications.next_num, filter=filter_read) }}">
+        Next &raquo;
+      </a>
+    </li>
+  </ul>
+</nav>
+{% endif %}
+
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="bi bi-bell-slash fs-1 d-block mb-3"></i>
+  <p class="mb-0">No notifications found.</p>
+</div>
+{% endif %}
+{% endblock %}

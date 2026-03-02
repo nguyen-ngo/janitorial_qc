@@ -6,6 +6,10 @@ from app import db
 from app.models.issue import Issue, IssueComment, IssueFollower
 from app.models.facility import Facility, Area
 from app.models.user import User
+from app.models.notification import (
+    EVENT_ISSUE_ASSIGNED, EVENT_ISSUE_STATUS,
+    EVENT_ISSUE_COMMENT, EVENT_ISSUE_FOLLOW,
+)
 from app.utils.forms import IssueForm, IssueUpdateForm
 from app.utils.decorators import supervisor_required
 from app.utils.notifications import notify
@@ -16,16 +20,8 @@ bp = Blueprint('issues', __name__, url_prefix='/issues')
 # ── Shared helper ─────────────────────────────────────────────────────────────
 
 def _notify_followers(issue, title, body, exclude_user_ids=None):
-    """Dispatch a notification to every follower of the given issue.
-
-    Parameters
-    ----------
-    issue            : Issue ORM instance
-    title            : Notification headline
-    body             : Notification body
-    exclude_user_ids : Set/list of user IDs to skip (e.g. the actor themselves)
-    """
-    exclude = set(exclude_user_ids or [])
+    """Dispatch a notification to every follower of the given issue."""
+    exclude    = set(exclude_user_ids or [])
     issue_link = url_for('issues.view', issue_id=issue.id)
     for follower in issue.followers.all():
         if follower.user_id in exclude:
@@ -36,6 +32,7 @@ def _notify_followers(issue, title, body, exclude_user_ids=None):
             body       = body,
             link       = issue_link,
             issue_id   = issue.id,
+            event_type = EVENT_ISSUE_FOLLOW,
             send_email = True,
         )
 
@@ -46,10 +43,8 @@ def _notify_followers(issue, title, body, exclude_user_ids=None):
 @login_required
 def index():
     page = request.args.get('page', 1, type=int)
+    q    = Issue.query.order_by(Issue.reported_at.desc())
 
-    q = Issue.query.order_by(Issue.reported_at.desc())
-
-    # Inspectors only see issues assigned to them
     if current_user.role == 'inspector':
         q = q.filter(Issue.assigned_to == current_user.id)
 
@@ -61,7 +56,6 @@ def index():
         q = q.filter(Issue.status == status_filter)
 
     issues = q.paginate(page=page, per_page=25, error_out=False)
-
     return render_template('issues/list.html',
                            issues=issues,
                            severity_filter=severity_filter,
@@ -75,13 +69,11 @@ def index():
 def view(issue_id):
     issue = Issue.query.get_or_404(issue_id)
 
-    # Access control: inspectors may only view/edit issues assigned to them
     if current_user.role == 'inspector' and issue.assigned_to != current_user.id:
         flash('Access denied. You can only view issues assigned to you.', 'danger')
         return redirect(url_for('issues.index'))
 
     form  = IssueUpdateForm(obj=issue)
-
     staff = User.query.filter(User.role.in_(['supervisor','inspector'])).order_by(User.username).all()
     form.assigned_to.choices = [(0, '— Unassigned —')] + [(u.id, u.username) for u in staff]
     form.status.data = form.status.data or issue.status
@@ -92,7 +84,6 @@ def view(issue_id):
 
         issue.status = form.status.data
 
-        # Only admin/supervisor can reassign; inspectors can only update status
         if current_user.role in ['admin', 'supervisor']:
             issue.assigned_to = form.assigned_to.data or None
 
@@ -101,10 +92,8 @@ def view(issue_id):
         elif form.status.data != 'resolved':
             issue.resolved_at = None
 
-        # Save result notes (overwrite with latest value)
         issue.result_notes = form.result_notes.data or None
 
-        # Append any newly uploaded result photos
         from app.routes.inspections import _save_photo
         new_photos = []
         for file_obj in request.files.getlist('result_photos'):
@@ -115,7 +104,6 @@ def view(issue_id):
             existing = issue.result_photos or []
             issue.result_photos = existing + new_photos
 
-        # Persist a comment entry if the user wrote update notes
         comment_body = form.update_notes.data.strip() if form.update_notes.data else ''
         if comment_body:
             comment = IssueComment(
@@ -133,12 +121,11 @@ def view(issue_id):
         )
 
         # ── Notifications ────────────────────────────────────────────────
-        issue_link       = url_for('issues.view', issue_id=issue.id)
-        new_assigned_to  = issue.assigned_to
-        # Always exclude the actor from receiving their own notifications
-        actor_id         = current_user.id
+        issue_link      = url_for('issues.view', issue_id=issue.id)
+        new_assigned_to = issue.assigned_to
+        actor_id        = current_user.id
 
-        # 1. Notify the assignee when status changes
+        # 1. Status changed — notify assignee
         if old_status != issue.status and new_assigned_to:
             assignee = User.query.get(new_assigned_to)
             if assignee and assignee.id != actor_id:
@@ -153,10 +140,11 @@ def view(issue_id):
                     ),
                     link       = issue_link,
                     issue_id   = issue.id,
+                    event_type = EVENT_ISSUE_STATUS,
                     send_email = True,
                 )
 
-        # 2. Notify newly assigned user when the assignee changes
+        # 2. Reassigned — notify new assignee
         if (old_assigned_to != new_assigned_to) and new_assigned_to:
             new_assignee = User.query.get(new_assigned_to)
             if new_assignee and new_assignee.id != actor_id:
@@ -170,10 +158,11 @@ def view(issue_id):
                     ),
                     link       = issue_link,
                     issue_id   = issue.id,
+                    event_type = EVENT_ISSUE_ASSIGNED,
                     send_email = True,
                 )
 
-        # 3. Notify the previously assigned user when unassigned
+        # 3. Unassigned — notify previous assignee
         if old_assigned_to and old_assigned_to != new_assigned_to:
             old_assignee = User.query.get(old_assigned_to)
             if old_assignee and old_assignee.id != actor_id:
@@ -186,10 +175,11 @@ def view(issue_id):
                     ),
                     link       = issue_link,
                     issue_id   = issue.id,
+                    event_type = EVENT_ISSUE_ASSIGNED,
                     send_email = True,
                 )
 
-        # 4. Notify the assignee when a comment is added (if not the commenter)
+        # 4. Comment added — notify assignee
         if comment_body and new_assigned_to:
             commentee = User.query.get(new_assigned_to)
             if commentee and commentee.id != actor_id:
@@ -202,11 +192,11 @@ def view(issue_id):
                     ),
                     link       = issue_link,
                     issue_id   = issue.id,
+                    event_type = EVENT_ISSUE_COMMENT,
                     send_email = True,
                 )
 
-        # 5. Notify all followers of any update (status change, comment, or reassignment)
-        #    Exclude the actor and the assignee (already notified above).
+        # 5. Notify followers — consolidated message, exclude actor + assignees
         exclude_ids = {actor_id}
         if new_assigned_to:
             exclude_ids.add(new_assigned_to)
@@ -226,14 +216,13 @@ def view(issue_id):
             changes.append(f'new comment added by {current_user.username}')
 
         if changes:
-            follower_body = (
-                f'Issue #{issue.id} in {issue.area.name} was updated by '
-                f'{current_user.username}: {"; ".join(changes)}.'
-            )
             _notify_followers(
-                issue       = issue,
-                title       = f'Issue #{issue.id} Updated',
-                body        = follower_body,
+                issue            = issue,
+                title            = f'Issue #{issue.id} Updated',
+                body             = (
+                    f'Issue #{issue.id} in {issue.area.name} was updated by '
+                    f'{current_user.username}: {"; ".join(changes)}.'
+                ),
                 exclude_user_ids = exclude_ids,
             )
 
@@ -242,7 +231,7 @@ def view(issue_id):
         return redirect(url_for('issues.view', issue_id=issue_id))
 
     is_following = issue.is_followed_by(current_user)
-    comments = issue.comments.order_by(IssueComment.created_at.asc()).all()
+    comments     = issue.comments.order_by(IssueComment.created_at.asc()).all()
     return render_template('issues/view.html',
                            issue=issue,
                            form=form,
@@ -256,7 +245,6 @@ def view(issue_id):
 @login_required
 def follow(issue_id):
     issue = Issue.query.get_or_404(issue_id)
-
     if not issue.is_followed_by(current_user):
         follower = IssueFollower(issue_id=issue.id, user_id=current_user.id)
         db.session.add(follower)
@@ -268,7 +256,6 @@ def follow(issue_id):
         flash('You are now following this issue and will receive notifications for any updates.', 'success')
     else:
         flash('You are already following this issue.', 'info')
-
     return redirect(url_for('issues.view', issue_id=issue_id))
 
 
@@ -277,8 +264,7 @@ def follow(issue_id):
 @bp.route('/<int:issue_id>/unfollow', methods=['POST'])
 @login_required
 def unfollow(issue_id):
-    issue = Issue.query.get_or_404(issue_id)
-
+    issue    = Issue.query.get_or_404(issue_id)
     follower = issue.followers.filter_by(user_id=current_user.id).first()
     if follower:
         db.session.delete(follower)
@@ -290,11 +276,10 @@ def unfollow(issue_id):
         flash('You have unfollowed this issue.', 'info')
     else:
         flash('You are not following this issue.', 'info')
-
     return redirect(url_for('issues.view', issue_id=issue_id))
 
 
-# ── Standalone create (not from an inspection) ────────────────────────────────
+# ── Standalone create ─────────────────────────────────────────────────────────
 
 @bp.route('/new', methods=['GET', 'POST'])
 @login_required
@@ -326,7 +311,6 @@ def create():
             issue.id, issue.severity, issue.area_id, issue.assigned_to, current_user.username
         )
 
-        # Notify the assignee of the new issue
         if issue.assigned_to:
             assignee = User.query.get(issue.assigned_to)
             if assignee and assignee.id != current_user.id:
@@ -341,6 +325,7 @@ def create():
                     ),
                     link       = url_for('issues.view', issue_id=issue.id),
                     issue_id   = issue.id,
+                    event_type = EVENT_ISSUE_ASSIGNED,
                     send_email = True,
                 )
                 db.session.commit()

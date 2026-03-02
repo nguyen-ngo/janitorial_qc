@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% block title %}Notification Preferences{% endblock %}
+
+{% block content %}
+<div class="row mb-3 align-items-center">
+  <div class="col">
+    <h4 class="mb-0">
+      <i class="bi bi-gear-fill text-secondary me-2"></i>Notification Preferences
+    </h4>
+    <p class="text-muted mb-0 mt-1" style="font-size:.85rem;">
+      Control how and when you receive notifications for each event type.
+    </p>
+  </div>
+  <div class="col-auto">
+    <a href="{{ url_for('notifications.index') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-bell"></i> View Notifications
+    </a>
+  </div>
+</div>
+
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="card shadow-sm">
+    <div class="card-header bg-light">
+      <div class="row fw-semibold text-muted" style="font-size:.8rem;">
+        <div class="col-md-4">Event</div>
+        <div class="col-md-2 text-center">Email Alerts</div>
+        <div class="col-md-2 text-center">Digest Mode</div>
+        <div class="col-md-3 text-center">Digest Frequency</div>
+        <div class="col-md-1"></div>
+      </div>
+    </div>
+
+    <ul class="list-group list-group-flush">
+      {% for event_type, label in event_types.items() %}
+      {% set pref = prefs_map.get(event_type) %}
+      {% set email_on  = pref.email_enabled    if pref else True %}
+      {% set digest_on = pref.digest_mode      if pref else False %}
+      {% set freq      = pref.digest_frequency if pref else 'daily' %}
+
+      <li class="list-group-item px-3 py-3" id="row-{{ event_type }}">
+        <div class="row align-items-center">
+
+          {# Event label #}
+          <div class="col-md-4">
+            <span class="fw-semibold" style="font-size:.9rem;">{{ label }}</span>
+          </div>
+
+          {# Email toggle #}
+          <div class="col-md-2 text-center">
+            <div class="form-check form-switch d-inline-block">
+              <input class="form-check-input email-toggle"
+                     type="checkbox"
+                     name="email_{{ event_type }}"
+                     id="email_{{ event_type }}"
+                     value="1"
+                     data-event="{{ event_type }}"
+                     {% if email_on %}checked{% endif %}>
+              <label class="form-check-label visually-hidden"
+                     for="email_{{ event_type }}">Email</label>
+            </div>
+          </div>
+
+          {# Digest mode toggle #}
+          <div class="col-md-2 text-center">
+            <div class="form-check form-switch d-inline-block">
+              <input class="form-check-input digest-toggle"
+                     type="checkbox"
+                     name="digest_{{ event_type }}"
+                     id="digest_{{ event_type }}"
+                     value="1"
+                     data-event="{{ event_type }}"
+                     {% if digest_on %}checked{% endif %}
+                     {% if not email_on %}disabled{% endif %}>
+              <label class="form-check-label visually-hidden"
+                     for="digest_{{ event_type }}">Digest</label>
+            </div>
+          </div>
+
+          {# Digest frequency #}
+          <div class="col-md-3 text-center">
+            <select class="form-select form-select-sm freq-select"
+                    name="freq_{{ event_type }}"
+                    id="freq_{{ event_type }}"
+                    style="width:auto;margin:auto;"
+                    {% if not email_on or not digest_on %}disabled{% endif %}>
+              <option value="hourly" {% if freq == 'hourly' %}selected{% endif %}>Hourly</option>
+              <option value="daily"  {% if freq == 'daily'  %}selected{% endif %}>Daily</option>
+            </select>
+          </div>
+
+          {# Status label #}
+          <div class="col-md-1 text-end">
+            <span class="badge status-badge
+                         {% if not email_on %}bg-secondary
+                         {% elif digest_on %}bg-warning text-dark
+                         {% else %}bg-success{% endif %}"
+                  style="font-size:.65rem;"
+                  id="badge-{{ event_type }}">
+              {% if not email_on %}Off
+              {% elif digest_on %}Digest
+              {% else %}Live{% endif %}
+            </span>
+          </div>
+
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <div class="mt-3 d-flex gap-2">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check2-circle me-1"></i>Save Preferences
+    </button>
+    <a href="{{ url_for('notifications.index') }}" class="btn btn-outline-secondary">
+      Cancel
+    </a>
+  </div>
+</form>
+
+<div class="card mt-4 border-0 bg-light">
+  <div class="card-body py-2 px-3">
+    <p class="mb-1" style="font-size:.8rem;"><strong>Email Alerts:</strong>
+      Send an immediate email every time this event occurs.</p>
+    <p class="mb-1" style="font-size:.8rem;"><strong>Digest Mode:</strong>
+      Hold notifications and deliver them in a single batched email on your chosen schedule.</p>
+    <p class="mb-0" style="font-size:.8rem;"><strong>Off:</strong>
+      In-app notifications still appear in the bell — only email is suppressed.</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  document.querySelectorAll('.email-toggle').forEach(function (emailChk) {
+    emailChk.addEventListener('change', function () {
+      var event      = this.dataset.event;
+      var digestChk  = document.getElementById('digest_' + event);
+      var freqSelect = document.getElementById('freq_'   + event);
+      var badge      = document.getElementById('badge_'  + event) ||
+                       document.getElementById('badge-'  + event);
+
+      var emailOn  = this.checked;
+      var digestOn = digestChk.checked;
+
+      // Cascade: disabling email disables digest and frequency
+      digestChk.disabled  = !emailOn;
+      freqSelect.disabled = !emailOn || !digestOn;
+
+      if (!emailOn) {
+        digestChk.checked = false;
+        digestOn = false;
+      }
+
+      updateBadge(badge, emailOn, digestOn);
+    });
+  });
+
+  document.querySelectorAll('.digest-toggle').forEach(function (digestChk) {
+    digestChk.addEventListener('change', function () {
+      var event      = this.dataset.event;
+      var freqSelect = document.getElementById('freq_'  + event);
+      var badge      = document.getElementById('badge_' + event) ||
+                       document.getElementById('badge-' + event);
+      var emailChk   = document.getElementById('email_' + event);
+
+      var emailOn  = emailChk.checked;
+      var digestOn = this.checked;
+
+      freqSelect.disabled = !emailOn || !digestOn;
+
+      updateBadge(badge, emailOn, digestOn);
+    });
+  });
+
+  function updateBadge(badge, emailOn, digestOn) {
+    if (!badge) return;
+    badge.className = badge.className
+      .replace(/bg-\S+/g, '')
+      .replace(/text-\S+/g, '')
+      .trim();
+
+    if (!emailOn) {
+      badge.classList.add('bg-secondary');
+      badge.textContent = 'Off';
+    } else if (digestOn) {
+      badge.classList.add('bg-warning', 'text-dark');
+      badge.textContent = 'Digest';
+    } else {
+      badge.classList.add('bg-success');
+      badge.textContent = 'Live';
+    }
+  }
+})();
+</script>
+{% endblock %}

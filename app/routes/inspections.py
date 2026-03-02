@@ -16,6 +16,7 @@ from app.utils.forms import StartInspectionForm, IssueForm
 from app.utils.decorators import supervisor_required
 from app.utils.pdf_export import generate_inspection_pdf
 from app.utils.notifications import notify
+from app.models.notification import EVENT_INSPECTION_DONE, EVENT_ISSUE_ASSIGNED
 
 bp = Blueprint('inspections', __name__, url_prefix='/inspections')
 
@@ -328,6 +329,7 @@ def execute(inspection_id):
                         ),
                         link          = inspection_link,
                         inspection_id = inspection.id,
+                        event_type    = EVENT_INSPECTION_DONE,
                         send_email    = True,
                     )
             db.session.commit()  # Commit notifications
@@ -456,6 +458,7 @@ def flag_issue(inspection_id):
                     ),
                     link          = url_for('issues.view', issue_id=issue.id),
                     issue_id      = issue.id,
+                    event_type    = EVENT_ISSUE_ASSIGNED,
                     send_email    = True,
                 )
                 db.session.commit()  # Commit notification

@@ -14,58 +14,35 @@
     {% block extra_css %}{% endblock %}
     <style>
         /* ── Notification bell styles ── */
-        .notif-bell-wrapper {
-            position: relative;
-        }
+        .notif-bell-wrapper { position: relative; }
         .notif-badge {
             position: absolute;
-            top: 2px;
-            right: 2px;
+            top: 2px; right: 2px;
             font-size: 0.6rem;
-            min-width: 16px;
-            height: 16px;
-            line-height: 16px;
-            padding: 0 4px;
-            border-radius: 8px;
+            min-width: 16px; height: 16px; line-height: 16px;
+            padding: 0 4px; border-radius: 8px;
             pointer-events: none;
         }
         .notif-dropdown {
-            width: 360px;
-            max-height: 480px;
+            width: 380px;
+            max-height: 520px;
             overflow-y: auto;
             padding: 0;
         }
         .notif-item {
             border-left: 3px solid transparent;
             transition: background 0.15s;
+            cursor: pointer;
         }
         .notif-item.unread {
             border-left-color: #0d6efd;
             background-color: #f0f6ff;
         }
-        .notif-item:hover {
-            background-color: #e8f0fe;
-        }
-        .notif-title {
-            font-size: 0.85rem;
-            font-weight: 600;
-            margin-bottom: 2px;
-        }
-        .notif-body {
-            font-size: 0.78rem;
-            color: #555;
-            white-space: normal;
-        }
-        .notif-time {
-            font-size: 0.7rem;
-            color: #999;
-        }
-        .notif-empty {
-            padding: 24px;
-            text-align: center;
-            color: #aaa;
-            font-size: 0.85rem;
-        }
+        .notif-item:hover { background-color: #e8f0fe; }
+        .notif-title  { font-size: 0.85rem; font-weight: 600; margin-bottom: 2px; }
+        .notif-body   { font-size: 0.78rem; color: #555; white-space: normal; }
+        .notif-time   { font-size: 0.7rem; color: #999; }
+        .notif-empty  { padding: 24px; text-align: center; color: #aaa; font-size: 0.85rem; }
     </style>
 </head>
 <body>
@@ -124,30 +101,56 @@
                             <span class="badge bg-danger notif-badge d-none" id="notif-count-badge"></span>
                             {% endif %}
                         </a>
-                        <div class="dropdown-menu dropdown-menu-end notif-dropdown shadow" id="notif-dropdown-menu">
-                            <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
-                                <span class="fw-semibold" style="font-size:0.9rem;">Notifications</span>
+                        <div class="dropdown-menu dropdown-menu-end notif-dropdown shadow"
+                             id="notif-dropdown-menu">
+                            <!-- Header -->
+                            <div class="d-flex justify-content-between align-items-center
+                                        px-3 py-2 border-bottom">
+                                <span class="fw-semibold" style="font-size:.9rem;">Notifications</span>
                                 <button class="btn btn-link btn-sm p-0 text-muted text-decoration-none"
-                                        id="mark-all-read-btn"
-                                        style="font-size:0.75rem;">
+                                        id="mark-all-read-btn" style="font-size:.75rem;">
                                     Mark all as read
                                 </button>
                             </div>
+                            <!-- Items -->
                             <div id="notif-list">
                                 <div class="notif-empty">Loading…</div>
+                            </div>
+                            <!-- Footer -->
+                            <div class="border-top d-flex justify-content-between px-3 py-2"
+                                 style="font-size:.8rem;">
+                                <a href="{{ url_for('notifications.index') }}"
+                                   class="text-decoration-none">
+                                    <i class="bi bi-list-ul me-1"></i>View all
+                                </a>
+                                <a href="{{ url_for('notifications.preferences') }}"
+                                   class="text-decoration-none text-muted">
+                                    <i class="bi bi-gear me-1"></i>Preferences
+                                </a>
                             </div>
                         </div>
                     </li>
                     <!-- ── End Notification Bell ── -->
 
+                    <!-- User menu -->
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown"
+                           role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-person-circle"></i> {{ current_user.username }}
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end">
-                            <li><a class="dropdown-item" href="#">Profile</a></li>
+                            <li>
+                                <a class="dropdown-item"
+                                   href="{{ url_for('notifications.preferences') }}">
+                                    <i class="bi bi-bell-slash me-1"></i>Notification Preferences
+                                </a>
+                            </li>
                             <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}">Logout</a></li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('auth.logout') }}">
+                                    <i class="bi bi-box-arrow-right me-1"></i>Logout
+                                </a>
+                            </li>
                         </ul>
                     </li>
                 </ul>
@@ -179,14 +182,14 @@
     (function () {
         'use strict';
 
-        const FEED_URL        = '{{ url_for("notifications.feed") }}';
-        const MARK_READ_BASE  = '/notifications/';
-        const MARK_ALL_URL    = '{{ url_for("notifications.mark_all_read") }}';
-        const CSRF_TOKEN      = '{{ csrf_token() }}';
-        const POLL_INTERVAL   = 60000;  // 60 seconds
+        const FEED_URL       = '{{ url_for("notifications.feed") }}';
+        const MARK_READ_BASE = '/notifications/';
+        const MARK_ALL_URL   = '{{ url_for("notifications.mark_all_read") }}';
+        const CSRF_TOKEN     = '{{ csrf_token() }}';
+        const POLL_INTERVAL  = 60000;  // 60 seconds
 
-        const badge    = document.getElementById('notif-count-badge');
-        const listEl   = document.getElementById('notif-list');
+        const badge      = document.getElementById('notif-count-badge');
+        const listEl     = document.getElementById('notif-list');
         const markAllBtn = document.getElementById('mark-all-read-btn');
 
         function updateBadge(count) {
@@ -201,27 +204,26 @@
 
         function renderNotifications(notifications) {
             if (!notifications.length) {
-                listEl.innerHTML = '<div class="notif-empty"><i class="bi bi-check2-circle me-1"></i>You\'re all caught up!</div>';
+                listEl.innerHTML = '<div class="notif-empty">'
+                    + '<i class="bi bi-check2-circle me-1"></i>You\'re all caught up!</div>';
                 return;
             }
 
             listEl.innerHTML = notifications.map(n => `
-                <a href="${n.link || '#'}"
-                   class="d-block text-decoration-none text-dark notif-item px-3 py-2 border-bottom ${n.is_read ? '' : 'unread'}"
-                   data-notif-id="${n.id}"
-                   data-link="${n.link || ''}">
+                <div class="d-block text-decoration-none text-dark notif-item px-3 py-2 border-bottom
+                            ${n.is_read ? '' : 'unread'}"
+                     data-notif-id="${n.id}"
+                     data-link="${escapeAttr(n.link || '')}">
                     <div class="notif-title">${escapeHtml(n.title)}</div>
                     <div class="notif-body">${escapeHtml(n.body)}</div>
                     <div class="notif-time">${escapeHtml(n.created_at)}</div>
-                </a>
+                </div>
             `).join('');
 
-            // Mark as read on click
             listEl.querySelectorAll('.notif-item').forEach(el => {
-                el.addEventListener('click', function (e) {
+                el.addEventListener('click', function () {
                     const id   = this.dataset.notifId;
                     const link = this.dataset.link;
-                    e.preventDefault();
                     markRead(id, () => {
                         this.classList.remove('unread');
                         if (link) window.location.href = link;
@@ -232,30 +234,28 @@
 
         function escapeHtml(str) {
             if (!str) return '';
-            return str.replace(/&/g, '&amp;')
-                      .replace(/</g, '&lt;')
-                      .replace(/>/g, '&gt;')
-                      .replace(/"/g, '&quot;');
+            return str.replace(/&/g,'&amp;').replace(/</g,'&lt;')
+                      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
+        function escapeAttr(str) { return escapeHtml(str); }
 
         function fetchNotifications() {
             fetch(FEED_URL, { credentials: 'same-origin' })
                 .then(r => r.json())
                 .then(data => {
                     updateBadge(data.unread_count);
-                    // Only re-render if dropdown is open to avoid disrupting user
-                    const dropdownEl = document.getElementById('notifDropdown');
-                    const isOpen = dropdownEl.getAttribute('aria-expanded') === 'true';
-                    if (isOpen) renderNotifications(data.notifications);
-                    // Store for rendering when opened
                     window._jqcNotifications = data.notifications;
+                    const dropdownEl = document.getElementById('notifDropdown');
+                    if (dropdownEl.getAttribute('aria-expanded') === 'true') {
+                        renderNotifications(data.notifications);
+                    }
                 })
-                .catch(() => {}); // Silently fail — non-critical
+                .catch(() => {});
         }
 
         function markRead(id, callback) {
             fetch(`${MARK_READ_BASE}${id}/mark-read`, {
-                method:  'POST',
+                method: 'POST',
                 headers: { 'X-CSRFToken': CSRF_TOKEN, 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
             })
@@ -264,7 +264,6 @@
             .catch(() => { if (callback) callback(); });
         }
 
-        // Render stored notifications when dropdown opens
         document.getElementById('notifDropdown').addEventListener('show.bs.dropdown', function () {
             if (window._jqcNotifications) {
                 renderNotifications(window._jqcNotifications);
@@ -273,18 +272,16 @@
             }
         });
 
-        // Mark all read button
         markAllBtn.addEventListener('click', function (e) {
             e.stopPropagation();
             fetch(MARK_ALL_URL, {
-                method:  'POST',
+                method: 'POST',
                 headers: { 'X-CSRFToken': CSRF_TOKEN },
                 credentials: 'same-origin',
             })
             .then(r => r.json())
             .then(() => {
                 updateBadge(0);
-                // Mark all items visually as read
                 listEl.querySelectorAll('.notif-item.unread').forEach(el => el.classList.remove('unread'));
                 if (window._jqcNotifications) {
                     window._jqcNotifications.forEach(n => n.is_read = true);
@@ -293,7 +290,6 @@
             .catch(() => {});
         });
 
-        // Initial fetch + periodic polling
         fetchNotifications();
         setInterval(fetchNotifications, POLL_INTERVAL);
     })();
