@@ -74,7 +74,7 @@
     {% if comments %}
     <div class="card shadow-sm mb-4">
       <div class="card-header bg-light">
-        <h6 class="mb-0"><i class="bi bi-clock-history"></i> Update History</h6>
+        <h6 class="mb-0" id="update-history"><i class="bi bi-clock-history"></i> Update History</h6>
       </div>
       <ul class="list-group list-group-flush">
         {% for c in comments %}
@@ -181,4 +181,32 @@
 <a href="{{ url_for('issues.index') }}" class="btn btn-outline-secondary btn-sm">
   <i class="bi bi-arrow-left"></i> Back to Issues
 </a>
+{% block extra_js %}
+<script>
+(function () {
+    'use strict';
+
+    // ── Immediate bell refresh after a successful update ──────────────────
+    // After form submit + redirect, Flask flashes 'Issue updated.' and the
+    // URL stays at /issues/<id>. We detect the flash message presence and
+    // call the global fetchNotifications() defined in base.html so the bell
+    // badge updates instantly without waiting for the 60-second poll cycle.
+    if (document.querySelector('.alert-success')) {
+        if (typeof fetchNotifications === 'function') {
+            fetchNotifications();
+        }
+    }
+
+    // ── Auto-scroll to Update History after save ──────────────────────────
+    // If there's a success flash AND comments exist, scroll the history
+    // section into view so the newly added comment is immediately visible.
+    if (document.querySelector('.alert-success')) {
+        var historyEl = document.getElementById('update-history');
+        if (historyEl) {
+            historyEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+})();
+</script>
+{% endblock %}
 {% endblock %}

@@ -24,7 +24,7 @@ Digest emails are sent by calling send_pending_digests(frequency) from the
 /notifications/send-digest route, which is triggered by a server cron job.
 """
 
-import logging
+import logging, threading
 from flask import current_app, render_template_string
 from flask_mail import Message
 from app import db, mail
@@ -218,7 +218,13 @@ def notify(
 
 
 def _send_single_email(recipient, title, body, link):
-    """Dispatch a single immediate notification email. Fire-and-forget."""
+    """Dispatch a single immediate notification email in a background thread.
+
+    Sending is offloaded to a daemon thread so SMTP latency never blocks the
+    HTTP response. The Flask application context is pushed explicitly so that
+    Flask-Mail and config lookups work outside the request context.
+    """
+    # Render templates while still inside the request context
     try:
         base_url = current_app.config.get('APP_BASE_URL', '').rstrip('/')
         sender   = current_app.config.get(
@@ -238,16 +244,31 @@ def _send_single_email(recipient, title, body, link):
             body       = text_body,
             html       = html_body,
         )
-        mail.send(msg)
-        logger.info(
-            'NOTIFICATION EMAIL SENT | to=%s | subject=%s',
-            recipient.email, msg.subject,
-        )
     except Exception as exc:
-        logger.error(
-            'NOTIFICATION EMAIL FAILED | to=%s | error=%s',
-            recipient.email, exc,
-        )
+        logger.error('NOTIFICATION EMAIL BUILD FAILED | to=%s | error=%s', recipient.email, exc)
+        return
+
+    # Capture app instance before leaving the request context
+    app              = current_app._get_current_object()
+    recipient_email  = recipient.email
+    subject          = msg.subject
+
+    def _send():
+        with app.app_context():
+            try:
+                mail.send(msg)
+                logger.info(
+                    'NOTIFICATION EMAIL SENT | to=%s | subject=%s',
+                    recipient_email, subject,
+                )
+            except Exception as exc:
+                logger.error(
+                    'NOTIFICATION EMAIL FAILED | to=%s | error=%s',
+                    recipient_email, exc,
+                )
+
+    t = threading.Thread(target=_send, daemon=True)
+    t.start()
 
 
 # ── Digest delivery ────────────────────────────────────────────────────────────

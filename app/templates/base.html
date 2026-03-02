@@ -239,7 +239,7 @@
         }
         function escapeAttr(str) { return escapeHtml(str); }
 
-        function fetchNotifications() {
+        window.fetchNotifications = function fetchNotifications() {
             fetch(FEED_URL, { credentials: 'same-origin' })
                 .then(r => r.json())
                 .then(data => {
