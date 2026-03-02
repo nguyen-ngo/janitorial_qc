@@ -19,6 +19,29 @@ class IssueComment(db.Model):
         return f'<IssueComment {self.id} issue={self.issue_id}>'
 
 
+# ── Issue Follower ─────────────────────────────────────────────────────────────
+# Association table linking users who opt in to receive notifications
+# for any updates on a specific issue.
+
+class IssueFollower(db.Model):
+    __tablename__ = 'issue_followers'
+
+    id         = db.Column(db.Integer, primary_key=True)
+    issue_id   = db.Column(db.Integer, db.ForeignKey('issues.id', ondelete='CASCADE'), nullable=False)
+    user_id    = db.Column(db.Integer, db.ForeignKey('users.id',  ondelete='CASCADE'), nullable=False)
+    created_at = db.Column(db.DateTime, default=now_eastern, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('issue_id', 'user_id', name='uq_issue_follower'),
+    )
+
+    user  = db.relationship('User',  foreign_keys=[user_id])
+    issue = db.relationship('Issue', foreign_keys=[issue_id], back_populates='followers')
+
+    def __repr__(self):
+        return f'<IssueFollower issue={self.issue_id} user={self.user_id}>'
+
+
 class Issue(db.Model):
     __tablename__ = 'issues'
 
@@ -40,6 +63,12 @@ class Issue(db.Model):
     comments      = db.relationship('IssueComment', backref='issue', lazy='dynamic',
                                     order_by='IssueComment.created_at',
                                     cascade='all, delete-orphan')
+    followers     = db.relationship('IssueFollower', back_populates='issue',
+                                    cascade='all, delete-orphan', lazy='dynamic')
+
+    def is_followed_by(self, user):
+        """Return True if the given user is currently following this issue."""
+        return self.followers.filter_by(user_id=user.id).first() is not None
 
     def __repr__(self):
         return f'<Issue {self.id} - {self.severity}>'

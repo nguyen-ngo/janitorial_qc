@@ -100,6 +100,38 @@
   </div>
 
   <div class="col-lg-4">
+
+    {# ── Follow / Unfollow ──────────────────────────────────────────────── #}
+    <div class="card shadow-sm mb-3">
+      <div class="card-body d-flex align-items-center justify-content-between py-2">
+        <div>
+          <i class="bi bi-bell{{ '-fill text-primary' if is_following else ' text-muted' }} me-1"></i>
+          <span class="fw-semibold" style="font-size:.9rem;">
+            {% if is_following %}Following{% else %}Not following{% endif %}
+          </span>
+          <span class="text-muted ms-2" style="font-size:.8rem;">
+            {{ issue.followers.count() }} follower{{ 's' if issue.followers.count() != 1 else '' }}
+          </span>
+        </div>
+        {% if is_following %}
+        <form method="post" action="{{ url_for('issues.unfollow', issue_id=issue.id) }}" class="mb-0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-bell-slash"></i> Unfollow
+          </button>
+        </form>
+        {% else %}
+        <form method="post" action="{{ url_for('issues.follow', issue_id=issue.id) }}" class="mb-0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-bell"></i> Follow
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ── Update Form ────────────────────────────────────────────────────── #}
     {% set can_edit = current_user.role in ['admin','supervisor'] or issue.assigned_to == current_user.id %}
     {% if can_edit %}
     <div class="card shadow-sm">
