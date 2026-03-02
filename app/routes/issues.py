@@ -56,10 +56,20 @@ def index():
         q = q.filter(Issue.status == status_filter)
 
     issues = q.paginate(page=page, per_page=25, error_out=False)
+
+    # Build a set of issue IDs the current user is following so the template
+    # can render the following badge and inline unfollow button without an
+    # additional query per row.
+    followed_ids = {
+        f.issue_id
+        for f in IssueFollower.query.filter_by(user_id=current_user.id).all()
+    }
+
     return render_template('issues/list.html',
                            issues=issues,
                            severity_filter=severity_filter,
-                           status_filter=status_filter)
+                           status_filter=status_filter,
+                           followed_ids=followed_ids)
 
 
 # ── View / Update ─────────────────────────────────────────────────────────────
@@ -276,7 +286,11 @@ def unfollow(issue_id):
         flash('You have unfollowed this issue.', 'info')
     else:
         flash('You are not following this issue.', 'info')
-    return redirect(url_for('issues.view', issue_id=issue_id))
+
+    # Respect an explicit next URL (e.g. return to the list page).
+    # Fall back to the issue view if none is provided.
+    next_url = request.form.get('next') or url_for('issues.view', issue_id=issue_id)
+    return redirect(next_url)
 
 
 # ── Standalone create ─────────────────────────────────────────────────────────
