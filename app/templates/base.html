@@ -141,6 +141,13 @@
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li>
                                 <a class="dropdown-item"
+                                   href="{{ url_for('auth.profile') }}">
+                                    <i class="bi bi-person-circle me-1"></i>My Profile
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item"
                                    href="{{ url_for('notifications.preferences') }}">
                                     <i class="bi bi-bell-slash me-1"></i>Notification Preferences
                                 </a>

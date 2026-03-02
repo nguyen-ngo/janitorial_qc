@@ -3,8 +3,11 @@ from flask_login import login_user, logout_user, login_required, current_user
 from urllib.parse import urlparse
 from app import db
 from app.models.user import User
-from app.utils.forms import LoginForm, UserForm
+from app.utils.forms import LoginForm, UserForm, ProfileForm
 from app.utils.decorators import admin_required
+import logging
+
+logger = logging.getLogger(__name__)
 
 bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -55,6 +58,57 @@ def logout():
     return redirect(url_for('auth.login'))
 
 
+@bp.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    """User profile page — view stats and update email/password."""
+    from app.models.inspection import Inspection
+    from app.models.issue import Issue
+
+    form = ProfileForm(user=current_user, obj=current_user)
+
+    if form.validate_on_submit():
+        current_user.email = form.email.data
+
+        if form.new_password.data:
+            current_user.set_password(form.new_password.data)
+            logger.info('AUTH | profile_password_change | user_id=%s username=%s',
+                        current_user.id, current_user.username)
+
+        db.session.commit()
+        logger.info('AUTH | profile_update | user_id=%s username=%s email=%s',
+                    current_user.id, current_user.username, current_user.email)
+        flash('Profile updated successfully.', 'success')
+        return redirect(url_for('auth.profile'))
+
+    # ── Activity stats ────────────────────────────────────────────────────
+    total_inspections = Inspection.query.filter_by(inspector_id=current_user.id).count()
+    completed_inspections = Inspection.query.filter_by(
+        inspector_id=current_user.id, status='completed'
+    ).count()
+
+    recent_inspections = (
+        Inspection.query
+        .filter_by(inspector_id=current_user.id)
+        .order_by(Inspection.inspection_date.desc())
+        .limit(5)
+        .all()
+    )
+
+    open_issues = Issue.query.filter_by(
+        assigned_to=current_user.id, status='open'
+    ).count() if hasattr(Issue, 'assigned_to') else 0
+
+    return render_template(
+        'auth/profile.html',
+        form=form,
+        total_inspections=total_inspections,
+        completed_inspections=completed_inspections,
+        recent_inspections=recent_inspections,
+        open_issues=open_issues,
+    )
+
+
 @bp.route('/users')
 @login_required
 @admin_required
@@ -78,6 +132,8 @@ def create_user():
         user.set_password(form.password.data)
         db.session.add(user)
         db.session.commit()
+        logger.info('AUTH | user_create | admin_id=%s admin=%s new_user=%s role=%s',
+                    current_user.id, current_user.username, user.username, user.role)
         flash(f'User {user.username} created successfully.', 'success')
         return redirect(url_for('auth.list_users'))
 
@@ -100,6 +156,8 @@ def edit_user(user_id):
             user.set_password(form.password.data)
 
         db.session.commit()
+        logger.info('AUTH | user_edit | admin_id=%s admin=%s target_user_id=%s target_user=%s',
+                    current_user.id, current_user.username, user.id, user.username)
         flash(f'User {user.username} updated successfully.', 'success')
         return redirect(url_for('auth.list_users'))
 
@@ -130,5 +188,7 @@ def delete_user(user_id):
     username = user.username
     db.session.delete(user)
     db.session.commit()
+    logger.info('AUTH | user_delete | admin_id=%s admin=%s deleted_user=%s',
+                current_user.id, current_user.username, username)
     flash(f'User {username} deleted successfully.', 'success')
     return redirect(url_for('auth.list_users'))

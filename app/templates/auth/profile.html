@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block title %}My Profile{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h2><i class="bi bi-person-circle"></i> My Profile</h2>
+        <p class="text-muted mb-0">Manage your account information and review your activity.</p>
+    </div>
+</div>
+
+<div class="row g-4">
+
+    <!-- ── Left column: account card + stats ─────────────────────────── -->
+    <div class="col-lg-4">
+
+        <!-- Account Info Card -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-body text-center py-4">
+                <div class="mb-3">
+                    <span class="display-1 text-primary">
+                        <i class="bi bi-person-circle"></i>
+                    </span>
+                </div>
+                <h4 class="mb-1 fw-bold">{{ current_user.username }}</h4>
+                <p class="text-muted mb-2">{{ current_user.email }}</p>
+                <span class="badge fs-6 bg-{% if current_user.role == 'admin' %}danger{% elif current_user.role == 'supervisor' %}warning{% else %}info{% endif %}">
+                    <i class="bi bi-{% if current_user.role == 'admin' %}shield-fill{% elif current_user.role == 'supervisor' %}star-fill{% else %}person-badge-fill{% endif %} me-1"></i>
+                    {{ current_user.role | title }}
+                </span>
+                <hr>
+                <small class="text-muted">
+                    <i class="bi bi-calendar3 me-1"></i>
+                    Member since {{ current_user.created_at.strftime('%B %d, %Y') }}
+                </small>
+            </div>
+        </div>
+
+        <!-- Activity Stats Card -->
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <h6 class="mb-0 fw-semibold"><i class="bi bi-bar-chart-fill me-1"></i>Activity Summary</h6>
+            </div>
+            <div class="card-body">
+                <div class="row text-center g-3">
+                    <div class="col-6">
+                        <div class="p-2 rounded bg-primary bg-opacity-10">
+                            <div class="fs-3 fw-bold text-primary">{{ total_inspections }}</div>
+                            <small class="text-muted">Total Inspections</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-2 rounded bg-success bg-opacity-10">
+                            <div class="fs-3 fw-bold text-success">{{ completed_inspections }}</div>
+                            <small class="text-muted">Completed</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-2 rounded bg-warning bg-opacity-10">
+                            <div class="fs-3 fw-bold text-warning">{{ open_issues }}</div>
+                            <small class="text-muted">Open Issues</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-2 rounded bg-info bg-opacity-10">
+                            {% if total_inspections > 0 %}
+                                <div class="fs-3 fw-bold text-info">
+                                    {{ ((completed_inspections / total_inspections) * 100) | int }}%
+                                </div>
+                            {% else %}
+                                <div class="fs-3 fw-bold text-info">—</div>
+                            {% endif %}
+                            <small class="text-muted">Completion Rate</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ── Right column: edit form + recent inspections ──────────────── -->
+    <div class="col-lg-8">
+
+        <!-- Edit Profile Form -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-light">
+                <h6 class="mb-0 fw-semibold"><i class="bi bi-pencil-square me-1"></i>Edit Profile</h6>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('auth.profile') }}">
+                    {{ form.hidden_tag() }}
+
+                    <!-- Email -->
+                    <div class="mb-3">
+                        {{ form.email.label(class="form-label fw-semibold") }}
+                        {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else ""),
+                                      placeholder="your@email.com") }}
+                        {% for error in form.email.errors %}
+                            <div class="invalid-feedback">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <hr class="my-3">
+                    <p class="text-muted small mb-3">
+                        <i class="bi bi-lock me-1"></i>Leave the password fields blank to keep your current password.
+                    </p>
+
+                    <!-- Current Password -->
+                    <div class="mb-3">
+                        {{ form.current_password.label(class="form-label fw-semibold") }}
+                        {{ form.current_password(class="form-control" + (" is-invalid" if form.current_password.errors else ""),
+                                                  autocomplete="current-password") }}
+                        {% for error in form.current_password.errors %}
+                            <div class="invalid-feedback">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <!-- New Password -->
+                    <div class="mb-3">
+                        {{ form.new_password.label(class="form-label fw-semibold") }}
+                        {{ form.new_password(class="form-control" + (" is-invalid" if form.new_password.errors else ""),
+                                             autocomplete="new-password") }}
+                        {% for error in form.new_password.errors %}
+                            <div class="invalid-feedback">{{ error }}</div>
+                        {% endfor %}
+                        <div class="form-text">Minimum 6 characters.</div>
+                    </div>
+
+                    <!-- Confirm New Password -->
+                    <div class="mb-4">
+                        {{ form.confirm_password.label(class="form-label fw-semibold") }}
+                        {{ form.confirm_password(class="form-control" + (" is-invalid" if form.confirm_password.errors else ""),
+                                                  autocomplete="new-password") }}
+                        {% for error in form.confirm_password.errors %}
+                            <div class="invalid-feedback">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle me-1"></i>Save Changes
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Recent Inspections -->
+        <div class="card shadow-sm">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-semibold"><i class="bi bi-clipboard-check me-1"></i>Recent Inspections</h6>
+                <a href="{{ url_for('inspections.index') }}" class="btn btn-sm btn-outline-primary">
+                    View All
+                </a>
+            </div>
+            <div class="card-body p-0">
+                {% if recent_inspections %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Date</th>
+                                <th>Facility</th>
+                                <th>Template</th>
+                                <th>Score</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for insp in recent_inspections %}
+                            <tr>
+                                <td>{{ insp.inspection_date.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ insp.facility.name if insp.facility else '—' }}</td>
+                                <td>{{ insp.template.name if insp.template else '—' }}</td>
+                                <td>
+                                    {% if insp.overall_score is not none %}
+                                        <span class="badge bg-{% if insp.overall_score >= 80 %}success{% elif insp.overall_score >= 60 %}warning{% else %}danger{% endif %}">
+                                            {{ "%.1f"|format(insp.overall_score) }}%
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-{% if insp.status == 'completed' %}success{% elif insp.status == 'in_progress' %}primary{% else %}warning{% endif %}">
+                                        {{ insp.status | replace('_', ' ') | title }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('inspections.view', inspection_id=insp.id) }}"
+                                       class="btn btn-sm btn-outline-secondary">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-muted">
+                    <i class="bi bi-clipboard-x fs-3 d-block mb-2"></i>
+                    No inspections recorded yet.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

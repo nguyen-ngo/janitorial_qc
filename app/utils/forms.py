@@ -16,6 +16,33 @@ class LoginForm(FlaskForm):
     remember_me = BooleanField('Keep me logged in')
 
 
+class ProfileForm(FlaskForm):
+    """Self-service profile update form — available to all authenticated users."""
+    email            = StringField('Email', validators=[DataRequired(), Email(), Length(max=255)])
+    current_password = PasswordField('Current Password', validators=[Optional()])
+    new_password     = PasswordField('New Password',     validators=[Optional(), Length(min=6, max=100)])
+    confirm_password = PasswordField('Confirm New Password', validators=[EqualTo('new_password', message='Passwords must match.')])
+
+    def __init__(self, user=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+
+    def validate_email(self, field):
+        q = User.query.filter_by(email=field.data).first()
+        if self.user and field.data != self.user.email and q:
+            raise ValidationError('Email already registered.')
+        elif not self.user and q:
+            raise ValidationError('Email already registered.')
+
+    def validate_current_password(self, field):
+        """Require current password only when the user wants to set a new one."""
+        if self.new_password.data:
+            if not field.data:
+                raise ValidationError('Please enter your current password to set a new one.')
+            if self.user and not self.user.check_password(field.data):
+                raise ValidationError('Current password is incorrect.')
+
+
 class UserForm(FlaskForm):
     username        = StringField('Username', validators=[DataRequired(), Length(min=3, max=100)])
     email           = StringField('Email', validators=[DataRequired(), Email(), Length(max=255)])
