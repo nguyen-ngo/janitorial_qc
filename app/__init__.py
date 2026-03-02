@@ -84,7 +84,4 @@ def create_app(config_name='default'):
         referrer = flask_request.referrer
         return redirect(referrer or url_for('dashboard.index')), 302
 
-    with app.app_context():
-        db.create_all()
-
     return app
