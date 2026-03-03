@@ -344,6 +344,13 @@ def execute(inspection_id):
             flash('Inspection submitted successfully!', 'success')
             return redirect(url_for('inspections.view', inspection_id=inspection_id))
 
+        elif action == 'flag':
+            # Save current form state as a draft so no work is lost,
+            # then send the inspector to the issue creation page.
+            _save_draft(inspection, responses)
+            db.session.commit()
+            return redirect(url_for('inspections.flag_issue', inspection_id=inspection_id))
+
         else:  # save draft
             _save_draft(inspection, responses)
             db.session.commit()

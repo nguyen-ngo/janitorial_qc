@@ -46,8 +46,8 @@ class ProfileForm(FlaskForm):
 class UserForm(FlaskForm):
     username        = StringField('Username', validators=[DataRequired(), Length(min=3, max=100)])
     email           = StringField('Email', validators=[DataRequired(), Email(), Length(max=255)])
-    password        = PasswordField('Password', validators=[Length(min=6, max=100)])
-    confirm_password = PasswordField('Confirm Password', validators=[EqualTo('password')])
+    password        = PasswordField('Password', validators=[Optional(), Length(min=6, max=100)])
+    confirm_password = PasswordField('Confirm Password', validators=[Optional(), EqualTo('password')])
     role            = SelectField('Role', choices=[
         ('admin', 'Administrator'), ('supervisor', 'Supervisor'), ('inspector', 'Inspector')
     ], validators=[DataRequired()])
@@ -55,6 +55,16 @@ class UserForm(FlaskForm):
     def __init__(self, user=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.user = user
+
+    def validate_password(self, field):
+        """Enforce minimum length only when a new password is actually provided."""
+        if field.data and len(field.data) < 6:
+            raise ValidationError('Password must be at least 6 characters.')
+
+    def validate_confirm_password(self, field):
+        """Require confirmation to match only when a new password is provided."""
+        if self.password.data and field.data != self.password.data:
+            raise ValidationError('Passwords must match.')
 
     def validate_username(self, field):
         q = User.query.filter_by(username=field.data).first()

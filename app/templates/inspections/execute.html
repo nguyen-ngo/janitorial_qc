@@ -214,10 +214,11 @@
     </div>
     <div class="d-flex gap-2 align-items-center">
       <span class="freq-badge">{{ inspection.template.frequency|title }}</span>
-      <a href="{{ url_for('inspections.flag_issue', inspection_id=inspection.id) }}"
-         class="btn btn-sm btn-outline-danger btn-outline-light">
+      <button type="submit" name="action" value="flag"
+              class="btn btn-sm btn-outline-danger btn-outline-light"
+              onclick="return confirm('Your current progress will be saved automatically. Continue to flag an issue?')">
         <i class="bi bi-exclamation-triangle"></i> Flag Issue
-      </a>
+      </button>
     </div>
   </div>
 
