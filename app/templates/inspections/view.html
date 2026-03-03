@@ -289,25 +289,22 @@
             {% endfor %}
 
             {% if vis.show %}
-              {# Flush pending section first #}
-              {% if remap.pending_sec is not none %}
-                {# Section: 1 row tall, spanning all 12 cols #}
-                <div class="fg-cell" style="grid-column:1 / span 12; grid-row:{{ remap.out_row }} / span 1;">
-                  <div class="section-head"><strong>{{ remap.pending_sec.label }}</strong></div>
-                </div>
-                {# Section consumed out_row; increment so the next data field gets a fresh row.
-                   Set last_orig_row to the current field's original row so the normal
-                   row-change check below does NOT fire again (avoiding a double-increment). #}
-                {% set remap.out_row = remap.out_row + 1 %}
-                {% set remap.pending_sec = none %}
-                {% set remap.last_orig_row = field.row %}
-              {% endif %}
-
-              {# Advance out_row only when the original row changes between consecutive
-                 data fields (section flushes above already handle their own increment). #}
+              {# Advance out_row for any row gap since the last rendered field.
+                 This MUST happen before flushing the section head so the section
+                 always appears below the previous content, never on the same row. #}
               {% if field.row != remap.last_orig_row and remap.last_orig_row != -1 %}
                 {% set remap.out_row = remap.out_row + 1 %}
               {% endif %}
+
+              {# Flush pending section head onto its own row, then advance for data. #}
+              {% if remap.pending_sec is not none %}
+                <div class="fg-cell" style="grid-column:1 / span 12; grid-row:{{ remap.out_row }} / span 1;">
+                  <div class="section-head"><strong>{{ remap.pending_sec.label }}</strong></div>
+                </div>
+                {% set remap.out_row = remap.out_row + 1 %}
+                {% set remap.pending_sec = none %}
+              {% endif %}
+
               {% set remap.last_orig_row = field.row %}
 
               {# Render the field at its original col/colSpan but remapped row #}
