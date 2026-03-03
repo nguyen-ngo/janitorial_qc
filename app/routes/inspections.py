@@ -344,13 +344,6 @@ def execute(inspection_id):
             flash('Inspection submitted successfully!', 'success')
             return redirect(url_for('inspections.view', inspection_id=inspection_id))
 
-        elif action == 'flag':
-            # Save current form state as a draft so no work is lost,
-            # then send the inspector to the issue creation page.
-            _save_draft(inspection, responses)
-            db.session.commit()
-            return redirect(url_for('inspections.flag_issue', inspection_id=inspection_id))
-
         else:  # save draft
             _save_draft(inspection, responses)
             db.session.commit()
@@ -379,6 +372,50 @@ def _save_draft(inspection, responses):
     """Save a draft of form responses — same storage as final, just status stays in_progress."""
     _save_responses(inspection, responses)
     db.session.commit()
+
+
+# ── AJAX: save draft (used by Flag Issue button before navigating away) ───────
+
+@bp.route('/<int:inspection_id>/save-draft', methods=['POST'])
+@login_required
+def save_draft_ajax(inspection_id):
+    """
+    Accepts a JSON body of { field_id: value } and persists it as a draft.
+    Returns JSON { ok: true } on success so the caller can navigate to flag_issue.
+    """
+    inspection = Inspection.query.get_or_404(inspection_id)
+
+    if current_user.role == 'inspector' and inspection.inspector_id != current_user.id:
+        return jsonify({'ok': False, 'error': 'Access denied'}), 403
+
+    if inspection.status == 'completed':
+        return jsonify({'ok': False, 'error': 'Inspection already completed'}), 400
+
+    data = request.get_json(silent=True) or {}
+    responses = data.get('responses', {})
+
+    # Merge with any previously saved responses so photo paths are preserved
+    existing_responses = {}
+    if inspection.notes:
+        try:
+            parsed = json.loads(inspection.notes)
+            if isinstance(parsed, dict) and '_form_data' in parsed:
+                existing_responses = parsed['_form_data']
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # Only overwrite keys that are present in the submitted data;
+    # preserve photo paths for image fields not included in the JSON payload.
+    merged = {**existing_responses, **responses}
+
+    _save_responses(inspection, merged)
+    db.session.commit()
+
+    current_app.logger.info(
+        'INSPECTION DRAFT SAVED (flag) | inspection_id=%s | by=%s',
+        inspection_id, current_user.username
+    )
+    return jsonify({'ok': True})
 
 
 # ── View ──────────────────────────────────────────────────────────────────────
