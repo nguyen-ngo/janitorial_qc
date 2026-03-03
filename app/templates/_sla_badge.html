@@ -1,0 +1,27 @@
+{#
+  _sla_badge.html — Reusable SLA status badge macro.
+
+  Usage:
+    {% from '_sla_badge.html' import sla_badge %}
+    {{ sla_badge(issue) }}
+#}
+
+{% macro sla_badge(issue) %}
+  {% set status = sla_status(issue) %}
+  {% if status == 'breached' %}
+    <span class="badge sla-breached" title="SLA breached — past deadline">
+      <i class="bi bi-alarm me-1"></i>SLA Breached
+    </span>
+  {% elif status == 'at_risk' %}
+    {% set hrs = sla_hours_remaining(issue) %}
+    <span class="badge sla-at-risk" title="SLA at risk — {{ hrs }}h remaining">
+      <i class="bi bi-alarm me-1"></i>At Risk{% if hrs is not none %} · {{ hrs }}h{% endif %}
+    </span>
+  {% elif status == 'ok' %}
+    {% set hrs = sla_hours_remaining(issue) %}
+    <span class="badge sla-ok" title="Within SLA — {{ hrs }}h remaining">
+      <i class="bi bi-check-circle me-1"></i>On Track{% if hrs is not none %} · {{ hrs }}h{% endif %}
+    </span>
+  {% endif %}
+  {# resolved issues show nothing #}
+{% endmacro %}

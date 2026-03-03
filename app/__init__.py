@@ -73,6 +73,13 @@ def create_app(config_name='default'):
     app.jinja_env.globals['csrf_token'] = generate_csrf
     app.jinja_env.globals['enumerate']  = enumerate
 
+    # SLA helpers available in all templates
+    from app.utils.sla import sla_status, sla_deadline, sla_hours_remaining, SLA_HOURS
+    app.jinja_env.globals['sla_status']          = sla_status
+    app.jinja_env.globals['sla_deadline']        = sla_deadline
+    app.jinja_env.globals['sla_hours_remaining'] = sla_hours_remaining
+    app.jinja_env.globals['SLA_HOURS']           = SLA_HOURS
+
     # ── Inject unread notification count into every template context ──────
     # This powers the red badge on the navbar bell icon without requiring
     # individual routes to pass the count manually.

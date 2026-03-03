@@ -14,6 +14,7 @@ from app.utils.forms import IssueForm, IssueUpdateForm
 from app.utils.decorators import supervisor_required
 from app.utils.notifications import notify
 from app.utils.audit import log_action, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE
+from app.utils.sla import sla_status
 
 bp = Blueprint('issues', __name__, url_prefix='/issues')
 
@@ -51,12 +52,19 @@ def index():
 
     severity_filter = request.args.get('severity', '')
     status_filter   = request.args.get('status', '')
+    sla_filter      = request.args.get('sla', '')
     if severity_filter:
         q = q.filter(Issue.severity == severity_filter)
     if status_filter:
         q = q.filter(Issue.status == status_filter)
 
-    issues = q.paginate(page=page, per_page=25, error_out=False)
+    # SLA filter — applied in Python after DB query since SLA is computed
+    issues_paged = q.paginate(page=page, per_page=25, error_out=False)
+
+    if sla_filter:
+        filtered_items = [i for i in issues_paged.items if sla_status(i) == sla_filter]
+    else:
+        filtered_items = issues_paged.items
 
     # Build a set of issue IDs the current user is following so the template
     # can render the following badge and inline unfollow button without an
@@ -67,9 +75,11 @@ def index():
     }
 
     return render_template('issues/list.html',
-                           issues=issues,
+                           issues=issues_paged,
+                           issue_items=filtered_items,
                            severity_filter=severity_filter,
                            status_filter=status_filter,
+                           sla_filter=sla_filter,
                            followed_ids=followed_ids)
 
 
