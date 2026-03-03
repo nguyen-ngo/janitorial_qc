@@ -289,15 +289,16 @@
             {% endfor %}
 
             {% if vis.show %}
-              {# Flush pending section first #}
-              {% if remap.pending_sec is not none %}
+              {# Flush pending section first #}\n              {% if remap.pending_sec is not none %}
                 {# Section: 1 row tall, spanning all 12 cols #}
                 <div class="fg-cell" style="grid-column:1 / span 12; grid-row:{{ remap.out_row }} / span 1;">
                   <div class="section-head"><strong>{{ remap.pending_sec.label }}</strong></div>
                 </div>
                 {% set remap.out_row = remap.out_row + 1 %}
                 {% set remap.pending_sec = none %}
-                {% set remap.last_orig_row = -1 %}
+                {# Set last_orig_row to field.row so the first data field after the section
+                   does NOT trigger an extra row advance — the section already consumed a row. #}
+                {% set remap.last_orig_row = field.row %}
               {% endif %}
 
               {# Advance out_row when the original row changes #}
