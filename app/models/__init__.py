@@ -3,3 +3,4 @@ from app.models.facility import Facility, Area
 from app.models.inspection import (InspectionTemplate, ChecklistItem,
                                    Inspection, InspectionResult)
 from app.models.issue import Issue
+from app.models.project import Project, CustomerAssignment

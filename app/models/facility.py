@@ -11,6 +11,10 @@ class Facility(db.Model):
     contact_phone = db.Column(db.String(20))
     active = db.Column(db.Boolean, default=True)
 
+    # Phase 1: link facility to a project (nullable for backward compatibility)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='SET NULL'),
+                           nullable=True, index=True)
+
     # Relationships
     areas = db.relationship('Area', backref='facility', lazy='dynamic')
     inspections = db.relationship('Inspection', backref='facility', lazy='dynamic')

@@ -14,7 +14,10 @@ class User(UserMixin, db.Model):
     username      = db.Column(db.String(100), unique=True, nullable=False, index=True)
     email         = db.Column(db.String(255), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
-    role          = db.Column(db.Enum('admin', 'supervisor', 'inspector'), nullable=False)
+    role          = db.Column(
+        db.Enum('admin', 'supervisor', 'inspector', 'project_manager', 'customer'),
+        nullable=False
+    )
     created_at    = db.Column(db.DateTime, default=now_eastern)
     active        = db.Column(db.Boolean, default=True, nullable=False)
 
