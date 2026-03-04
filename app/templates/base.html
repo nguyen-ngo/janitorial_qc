@@ -68,9 +68,11 @@
                         <a class="nav-link" href="{{ url_for('projects.index') }}">Projects</a>
                     </li>
                     {% endif %}
+                    {% if current_user.role != 'customer' %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('templates.index') }}">Templates</a>
                     </li>
+                    {% endif %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('inspections.index') }}">Inspections</a>
                     </li>

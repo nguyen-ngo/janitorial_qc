@@ -6,13 +6,20 @@ from app.models.project import Project
 from app.utils.forms import FacilityForm, AreaForm
 from app.utils.decorators import supervisor_required, admin_required
 from app.utils.audit import log_action, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE
+from app.utils.scope import get_customer_scope
 
 bp = Blueprint('facilities', __name__, url_prefix='/facilities')
 
 @bp.route('/')
 @login_required
 def list_facilities():
-    facilities = Facility.query.order_by(Facility.name).all()
+    if current_user.role == 'customer':
+        cids = get_customer_scope(current_user) or []
+        facilities = Facility.query.filter(
+            Facility.id.in_(cids), Facility.active == True
+        ).order_by(Facility.name).all()
+    else:
+        facilities = Facility.query.order_by(Facility.name).all()
     return render_template('facilities/list.html', facilities=facilities)
 
 @bp.route('/new', methods=['GET', 'POST'])
@@ -47,6 +54,11 @@ def create_facility():
 @login_required
 def view_facility(facility_id):
     facility = Facility.query.get_or_404(facility_id)
+    if current_user.role == 'customer':
+        cids = get_customer_scope(current_user) or []
+        if facility_id not in cids:
+            flash('Access denied.', 'danger')
+            return redirect(url_for('facilities.list_facilities'))
     areas = facility.areas.order_by(Area.name).all()
     return render_template('facilities/view.html', facility=facility, areas=areas)
 

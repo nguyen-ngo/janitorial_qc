@@ -12,6 +12,7 @@ from app.models.facility import Facility, Area
 from app.models.issue import Issue
 from app.models.user import User
 from app.utils.decorators import supervisor_required
+from app.utils.scope import get_customer_scope
 
 bp = Blueprint('reports', __name__, url_prefix='/reports')
 
@@ -36,33 +37,56 @@ def _date_range():
 
 @bp.route('/')
 @login_required
-@supervisor_required
 def index():
+    # Customers get a scoped view; internal staff need supervisor+ access
+    if current_user.role not in ['admin', 'supervisor', 'project_manager', 'customer']:
+        from flask import flash, redirect, url_for
+        flash('Access denied.', 'danger')
+        return redirect(url_for('dashboard.index'))
+
     start, end = _date_range()
 
-    base = Inspection.query.filter(
+    # Resolve facility scope for customers
+    customer_facility_ids = get_customer_scope(current_user)  # None = unrestricted
+
+    def _scope_insp(q):
+        if customer_facility_ids is not None:
+            if not customer_facility_ids:
+                return q.filter(False)
+            return q.filter(Inspection.facility_id.in_(customer_facility_ids))
+        return q
+
+    def _scope_issue(q):
+        if customer_facility_ids is not None:
+            if not customer_facility_ids:
+                return q.filter(False)
+            return q.join(Area, Issue.area_id == Area.id).filter(
+                Area.facility_id.in_(customer_facility_ids)
+            )
+        return q
+
+    base = _scope_insp(Inspection.query.filter(
         Inspection.inspection_date >= start,
         Inspection.inspection_date <= end,
-    )
+    ))
 
     total_inspections = base.count()
     completed         = base.filter(Inspection.status == 'completed').count()
-    # "Flagged" = open or in-progress issues logged within the date range,
-    # not inspections with status='flagged' (those get completed on submit).
-    flagged           = Issue.query.filter(
+    flagged           = _scope_issue(Issue.query.filter(
         Issue.reported_at >= start,
         Issue.reported_at <= end,
         Issue.status != 'resolved',
-    ).count()
+    )).count()
     avg_score         = db.session.query(func.avg(Inspection.overall_score)).filter(
         Inspection.inspection_date >= start,
         Inspection.inspection_date <= end,
         Inspection.status == 'completed',
         Inspection.overall_score.isnot(None),
-    ).scalar()
+    )
+    avg_score = _scope_insp(avg_score).scalar()
 
     # Scores by facility (for bar chart)
-    facility_scores = db.session.query(
+    fac_score_q = db.session.query(
         Facility.name,
         func.avg(Inspection.overall_score).label('avg_score'),
         func.count(Inspection.id).label('count'),
@@ -72,11 +96,16 @@ def index():
         Inspection.inspection_date <= end,
         Inspection.status == 'completed',
         Inspection.overall_score.isnot(None),
-     ).group_by(Facility.id, Facility.name)\
-      .order_by(func.avg(Inspection.overall_score).desc()).all()
+     )
+    if customer_facility_ids is not None:
+        fac_score_q = fac_score_q.filter(
+            Facility.id.in_(customer_facility_ids) if customer_facility_ids else False
+        )
+    facility_scores = fac_score_q.group_by(Facility.id, Facility.name)\
+                                  .order_by(func.avg(Inspection.overall_score).desc()).all()
 
     # Score trend — daily averages (line chart)
-    daily_scores = db.session.query(
+    daily_q = db.session.query(
         func.date(Inspection.inspection_date).label('day'),
         func.avg(Inspection.overall_score).label('avg'),
         func.count(Inspection.id).label('count'),
@@ -85,47 +114,50 @@ def index():
         Inspection.inspection_date <= end,
         Inspection.status == 'completed',
         Inspection.overall_score.isnot(None),
-    ).group_by(func.date(Inspection.inspection_date))\
-     .order_by(func.date(Inspection.inspection_date)).all()
+    )
+    daily_scores = _scope_insp(daily_q).group_by(func.date(Inspection.inspection_date))\
+                                        .order_by(func.date(Inspection.inspection_date)).all()
 
     # Issue breakdown by severity
-    issue_severity = db.session.query(
+    issue_severity = _scope_issue(db.session.query(
         Issue.severity,
         func.count(Issue.id).label('count'),
     ).filter(
         Issue.reported_at >= start,
         Issue.reported_at <= end,
-    ).group_by(Issue.severity).all()
+    )).group_by(Issue.severity).all()
 
     # Issue status breakdown
-    issue_status = db.session.query(
+    issue_status = _scope_issue(db.session.query(
         Issue.status,
         func.count(Issue.id).label('count'),
     ).filter(
         Issue.reported_at >= start,
         Issue.reported_at <= end,
-    ).group_by(Issue.status).all()
+    )).group_by(Issue.status).all()
 
-    # Top inspectors by inspection count
-    top_inspectors = db.session.query(
-        User.username,
-        func.count(Inspection.id).label('count'),
-        func.avg(Inspection.overall_score).label('avg_score'),
-    ).join(Inspection, User.id == Inspection.inspector_id)\
-     .filter(
-        Inspection.inspection_date >= start,
-        Inspection.inspection_date <= end,
-        Inspection.status == 'completed',
-     ).group_by(User.id, User.username)\
-      .order_by(func.count(Inspection.id).desc()).limit(10).all()
+    # Top inspectors by inspection count (hidden for customer role)
+    top_inspectors = []
+    if current_user.role != 'customer':
+        top_inspectors = db.session.query(
+            User.username,
+            func.count(Inspection.id).label('count'),
+            func.avg(Inspection.overall_score).label('avg_score'),
+        ).join(Inspection, User.id == Inspection.inspector_id)\
+         .filter(
+            Inspection.inspection_date >= start,
+            Inspection.inspection_date <= end,
+            Inspection.status == 'completed',
+         ).group_by(User.id, User.username)\
+          .order_by(func.count(Inspection.id).desc()).limit(10).all()
 
-    # Recent issues (critical/high)
-    critical_issues = Issue.query.filter(
+    # Recent issues (critical/high) — scoped for customers
+    critical_issues = _scope_issue(Issue.query.filter(
         Issue.severity.in_(['critical', 'high']),
         Issue.status != 'resolved',
         Issue.reported_at >= start,
         Issue.reported_at <= end,
-    ).order_by(Issue.reported_at.desc()).limit(10).all()
+    )).order_by(Issue.reported_at.desc()).limit(10).all()
 
     return render_template('reports/index.html',
         start=start, end=end,
@@ -146,9 +178,18 @@ def index():
 
 @bp.route('/facility/<int:facility_id>')
 @login_required
-@supervisor_required
 def facility_report(facility_id):
+    if current_user.role not in ['admin', 'supervisor', 'project_manager', 'customer']:
+        from flask import flash, redirect, url_for
+        flash('Access denied.', 'danger')
+        return redirect(url_for('dashboard.index'))
     facility    = Facility.query.get_or_404(facility_id)
+    if current_user.role == 'customer':
+        cids = get_customer_scope(current_user) or []
+        if facility_id not in cids:
+            from flask import flash, redirect, url_for
+            flash('Access denied.', 'danger')
+            return redirect(url_for('reports.index'))
     start, end  = _date_range()
 
     inspections = Inspection.query.filter(

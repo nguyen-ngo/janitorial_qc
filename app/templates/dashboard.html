@@ -95,6 +95,59 @@
 </div>
 {% endif %}
 
+{# ── Customer portal: scoped facilities panel ───────────────────────────── #}
+{% if current_user.role == 'customer' %}
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header bg-light fw-semibold">
+        <i class="bi bi-building me-1"></i> Your Facilities
+      </div>
+      {% if customer_facilities %}
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Facility</th>
+                <th>Address</th>
+                <th>Project</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for f in customer_facilities %}
+              <tr>
+                <td><strong>{{ f.name }}</strong></td>
+                <td class="text-muted small">{{ f.address or '—' }}</td>
+                <td class="text-muted small">{{ f.project.name if f.project else '—' }}</td>
+                <td>
+                  <a href="{{ url_for('facilities.view_facility', facility_id=f.id) }}"
+                     class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-eye"></i> View
+                  </a>
+                  <a href="{{ url_for('reports.facility_report', facility_id=f.id) }}"
+                     class="btn btn-sm btn-outline-secondary ms-1">
+                    <i class="bi bi-graph-up"></i> Report
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% else %}
+      <div class="card-body text-muted small">
+        <i class="bi bi-info-circle me-1"></i>
+        No facilities have been assigned to your account yet. Please contact your administrator.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {# ── System quick stats (admin/supervisor) ──────────────────────────────── #}
 {% if current_user.role in ['admin', 'supervisor'] %}
 <div class="row g-3 mb-4">

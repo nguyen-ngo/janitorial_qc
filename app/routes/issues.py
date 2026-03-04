@@ -14,6 +14,7 @@ from app.utils.forms import IssueForm, IssueUpdateForm
 from app.utils.decorators import supervisor_required
 from app.utils.notifications import notify
 from app.utils.audit import log_action, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE
+from app.utils.scope import get_customer_scope
 from app.utils.sla import sla_status
 
 bp = Blueprint('issues', __name__, url_prefix='/issues')
@@ -49,6 +50,15 @@ def index():
 
     if current_user.role == 'inspector':
         q = q.filter(Issue.assigned_to == current_user.id)
+    elif current_user.role == 'customer':
+        from app.models.facility import Area
+        customer_facility_ids = get_customer_scope(current_user)
+        if not customer_facility_ids:
+            q = q.filter(False)
+        else:
+            q = q.join(Area, Issue.area_id == Area.id).filter(
+                Area.facility_id.in_(customer_facility_ids)
+            )
 
     severity_filter = request.args.get('severity', '')
     status_filter   = request.args.get('status', '')
@@ -93,6 +103,13 @@ def view(issue_id):
     if current_user.role == 'inspector' and issue.assigned_to != current_user.id:
         flash('Access denied. You can only view issues assigned to you.', 'danger')
         return redirect(url_for('issues.index'))
+    if current_user.role == 'customer':
+        from app.models.facility import Area
+        cids = get_customer_scope(current_user) or []
+        area = Area.query.get(issue.area_id)
+        if not area or area.facility_id not in cids:
+            flash('Access denied.', 'danger')
+            return redirect(url_for('issues.index'))
 
     form  = IssueUpdateForm(obj=issue)
     staff = User.query.filter(User.role.in_(['supervisor','inspector'])).order_by(User.username).all()

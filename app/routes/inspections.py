@@ -18,6 +18,7 @@ from app.utils.pdf_export import generate_inspection_pdf
 from app.utils.notifications import notify
 from app.models.notification import EVENT_INSPECTION_DONE, EVENT_ISSUE_ASSIGNED
 from app.utils.audit import log_action, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE, ACTION_EXPORT
+from app.utils.scope import get_customer_scope
 
 bp = Blueprint('inspections', __name__, url_prefix='/inspections')
 
@@ -180,6 +181,12 @@ def index():
 
     if current_user.role == 'inspector':
         q = q.filter(Inspection.inspector_id == current_user.id)
+    elif current_user.role == 'customer':
+        customer_facility_ids = get_customer_scope(current_user)
+        if not customer_facility_ids:
+            q = q.filter(False)
+        else:
+            q = q.filter(Inspection.facility_id.in_(customer_facility_ids))
 
     status_filter   = request.args.get('status', '')
     facility_filter = request.args.get('facility_id', '')
@@ -189,7 +196,11 @@ def index():
         q = q.filter(Inspection.facility_id == int(facility_filter))
 
     inspections = q.paginate(page=page, per_page=20, error_out=False)
-    facilities  = Facility.query.filter_by(active=True).order_by(Facility.name).all()
+    if current_user.role == 'customer':
+        cids = get_customer_scope(current_user) or []
+        facilities = Facility.query.filter(Facility.id.in_(cids), Facility.active == True).order_by(Facility.name).all()
+    else:
+        facilities  = Facility.query.filter_by(active=True).order_by(Facility.name).all()
 
     return render_template('inspections/list.html',
                            inspections=inspections,
@@ -428,6 +439,11 @@ def view(inspection_id):
     if current_user.role == 'inspector' and inspection.inspector_id != current_user.id:
         flash('Access denied.', 'danger')
         return redirect(url_for('inspections.index'))
+    if current_user.role == 'customer':
+        cids = get_customer_scope(current_user) or []
+        if inspection.facility_id not in cids:
+            flash('Access denied.', 'danger')
+            return redirect(url_for('inspections.index'))
 
     template    = inspection.template
     form_fields = sorted(template.get_form_schema(),
@@ -533,6 +549,11 @@ def export_pdf(inspection_id):
     if current_user.role == 'inspector' and inspection.inspector_id != current_user.id:
         flash('Access denied.', 'danger')
         return redirect(url_for('inspections.index'))
+    if current_user.role == 'customer':
+        cids = get_customer_scope(current_user) or []
+        if inspection.facility_id not in cids:
+            flash('Access denied.', 'danger')
+            return redirect(url_for('inspections.index'))
 
     template    = inspection.template
     form_fields = sorted(template.get_form_schema(),
