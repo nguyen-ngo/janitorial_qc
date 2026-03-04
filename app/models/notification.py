@@ -11,6 +11,7 @@ EVENT_ISSUE_STATUS      = 'issue_status'
 EVENT_ISSUE_COMMENT     = 'issue_comment'
 EVENT_ISSUE_FOLLOW      = 'issue_follow_update'
 EVENT_INSPECTION_DONE   = 'inspection_completed'
+EVENT_SLA_ALERT         = 'sla_alert'
 
 ALL_EVENT_TYPES = {
     EVENT_ISSUE_ASSIGNED:  'Issue assigned to me',
@@ -18,6 +19,7 @@ ALL_EVENT_TYPES = {
     EVENT_ISSUE_COMMENT:   'New comment on issue',
     EVENT_ISSUE_FOLLOW:    'Updates on followed issues',
     EVENT_INSPECTION_DONE: 'Inspection completed',
+    EVENT_SLA_ALERT:       'SLA at-risk / breached alerts',
 }
 
 

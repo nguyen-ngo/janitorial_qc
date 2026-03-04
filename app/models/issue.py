@@ -58,6 +58,10 @@ class Issue(db.Model):
     result_notes  = db.Column(db.Text)
     result_photos = db.Column(db.JSON)   # list of relative paths e.g. ["uploads/issue_photos/abc.jpg"]
 
+    # Tracks which SLA alert level has already been notified so cron runs
+    # don't fire duplicate notifications. Values: None / 'at_risk' / 'breached'
+    sla_notified  = db.Column(db.String(10), nullable=True, default=None)
+
     # Relationships
     assigned_user = db.relationship('User', foreign_keys=[assigned_to], backref='assigned_issues')
     comments      = db.relationship('IssueComment', backref='issue', lazy='dynamic',

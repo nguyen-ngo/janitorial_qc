@@ -194,3 +194,29 @@ def send_digest():
 
     logger.info('DIGEST TRIGGERED | frequency=%s | sent=%s', frequency, sent)
     return jsonify({'ok': True, 'sent': sent, 'frequency': frequency})
+
+# ── SLA alert trigger (called by cron) ────────────────────────────────────────
+
+@bp.route('/check-sla', methods=['POST'])
+def check_sla():
+    """Scan all open issues for SLA breaches and dispatch alerts.
+
+    Protected by the same DIGEST_SECRET token used for digest delivery.
+    Recommended cron schedule — every 30 minutes is sufficient for most
+    deployments; adjust based on your shortest SLA threshold (critical = 4h):
+
+        */30 * * * * curl -s -X POST https://yourdomain.com/notifications/check-sla \\
+            -d "token=YOUR_DIGEST_SECRET"
+    """
+    token    = request.form.get('token') or request.args.get('token')
+    expected = current_app.config.get('DIGEST_SECRET')
+
+    if not expected or token != expected:
+        logger.warning('SLA CHECK REJECTED | bad or missing token')
+        abort(403)
+
+    from app.utils.sla import send_sla_alerts
+    sent = send_sla_alerts()
+
+    logger.info('SLA CHECK TRIGGERED | notifications_sent=%s', sent)
+    return jsonify({'ok': True, 'notifications_sent': sent})

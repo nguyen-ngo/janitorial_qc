@@ -109,9 +109,10 @@ def view(issue_id):
             issue.assigned_to = form.assigned_to.data or None
 
         if form.status.data == 'resolved' and not issue.resolved_at:
-            issue.resolved_at = now_eastern()
+            issue.resolved_at  = now_eastern()
+            issue.sla_notified = None   # clear so alerts fire again if re-opened
         elif form.status.data != 'resolved':
-            issue.resolved_at = None
+            issue.resolved_at  = None
 
         issue.result_notes = form.result_notes.data or None
 
