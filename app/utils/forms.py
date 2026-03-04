@@ -94,6 +94,7 @@ class FacilityForm(FlaskForm):
     address        = TextAreaField('Address', validators=[Optional()])
     contact_person = StringField('Contact Person', validators=[Optional(), Length(max=100)])
     contact_phone  = StringField('Contact Phone',  validators=[Optional(), Length(max=20)])
+    project_id     = SelectField('Project', coerce=int, validators=[Optional()])
     active         = BooleanField('Active', default=True)
 
 
@@ -175,3 +176,16 @@ class IssueUpdateForm(FlaskForm):
         Optional(),
         FileAllowed(['jpg','jpeg','png','gif'], 'Images only.')
     ])
+
+# ── Projects ─────────────────────────────────────────────────────────────────
+
+class ProjectForm(FlaskForm):
+    name               = StringField('Project Name', validators=[DataRequired(), Length(max=255)])
+    description        = TextAreaField('Description', validators=[Optional()])
+    project_manager_id = SelectField('Project Manager', coerce=int, validators=[Optional()])
+    active             = BooleanField('Active', default=True)
+
+
+class CustomerAssignmentForm(FlaskForm):
+    user_id     = SelectField('Customer User', coerce=int, validators=[DataRequired()])
+    facility_id = SelectField('Facility Scope', coerce=int, validators=[Optional()])

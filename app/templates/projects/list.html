@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Projects{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-center">
+    <div class="col">
+        <h2><i class="bi bi-folder2-open"></i> Projects</h2>
+    </div>
+    {% if current_user.role in ['admin', 'supervisor'] %}
+    <div class="col-auto">
+        <a href="{{ url_for('projects.create') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> New Project
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<div class="row">
+    {% for project in projects %}
+    <div class="col-md-6 col-lg-4 mb-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h5 class="card-title mb-0">
+                        <a href="{{ url_for('projects.view', project_id=project.id) }}" class="text-decoration-none">
+                            {{ project.name }}
+                        </a>
+                    </h5>
+                    {% if not project.active %}
+                    <span class="badge bg-secondary ms-2">Inactive</span>
+                    {% else %}
+                    <span class="badge bg-success ms-2">Active</span>
+                    {% endif %}
+                </div>
+
+                {% if project.description %}
+                <p class="card-text text-muted small">{{ project.description }}</p>
+                {% endif %}
+
+                <div class="mt-3 d-flex gap-3">
+                    <small class="text-muted">
+                        <i class="bi bi-building"></i> {{ project.facilities.count() }} facilities
+                    </small>
+                    {% if project.project_manager %}
+                    <small class="text-muted">
+                        <i class="bi bi-person-badge"></i> {{ project.project_manager.username }}
+                    </small>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-footer bg-transparent d-flex gap-2">
+                <a href="{{ url_for('projects.view', project_id=project.id) }}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-eye"></i> View
+                </a>
+                {% if current_user.role in ['admin', 'supervisor'] %}
+                <a href="{{ url_for('projects.edit', project_id=project.id) }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-pencil"></i> Edit
+                </a>
+                {% endif %}
+                {% if current_user.role == 'admin' %}
+                <form method="POST" action="{{ url_for('projects.delete', project_id=project.id) }}"
+                      class="ms-auto d-inline"
+                      onsubmit="return confirm('Delete project \'{{ project.name }}\'? This cannot be undone.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> No projects have been created yet.
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

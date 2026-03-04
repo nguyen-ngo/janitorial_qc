@@ -34,8 +34,8 @@
                         <td><strong>{{ user.username }}</strong></td>
                         <td>{{ user.email }}</td>
                         <td>
-                            <span class="badge bg-{% if user.role == 'admin' %}danger{% elif user.role == 'supervisor' %}warning{% else %}info{% endif %}">
-                                {{ user.role|title }}
+                            <span class="badge bg-{% if user.role == 'admin' %}danger{% elif user.role == 'supervisor' %}warning{% elif user.role == 'project_manager' %}primary{% elif user.role == 'customer' %}success{% else %}info{% endif %}">
+                                {{ user.role.replace('_',' ')|title }}
                             </span>
                         </td>
                         <td>{{ user.created_at.strftime('%Y-%m-%d') }}</td>

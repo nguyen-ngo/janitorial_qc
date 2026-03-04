@@ -5,8 +5,8 @@
 <div class="row mb-3 align-items-center">
   <div class="col">
     <h2 class="mb-0">Welcome, {{ current_user.username }}!</h2>
-    <span class="badge bg-{% if current_user.role == 'admin' %}danger{% elif current_user.role == 'supervisor' %}warning{% else %}info{% endif %} mt-1">
-      {{ current_user.role|title }}
+    <span class="badge bg-{% if current_user.role == 'admin' %}danger{% elif current_user.role == 'supervisor' %}warning{% elif current_user.role == 'project_manager' %}primary{% elif current_user.role == 'customer' %}success{% else %}info{% endif %} mt-1">
+      {{ current_user.role.replace('_',' ')|title }}
     </span>
   </div>
 </div>

@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-center">
+    <div class="col">
+        <h2>
+            <i class="bi bi-folder2-open"></i> {{ project.name }}
+            {% if not project.active %}
+            <span class="badge bg-secondary ms-2 fs-6">Inactive</span>
+            {% endif %}
+        </h2>
+        {% if project.description %}
+        <p class="text-muted">{{ project.description }}</p>
+        {% endif %}
+    </div>
+    <div class="col-auto d-flex gap-2">
+        {% if current_user.role in ['admin', 'supervisor'] %}
+        <a href="{{ url_for('projects.edit', project_id=project.id) }}" class="btn btn-outline-secondary">
+            <i class="bi bi-pencil"></i> Edit
+        </a>
+        {% endif %}
+        <a href="{{ url_for('projects.index') }}" class="btn btn-outline-primary">
+            <i class="bi bi-arrow-left"></i> All Projects
+        </a>
+    </div>
+</div>
+
+<div class="row g-4">
+
+    {# ── Project Info ── #}
+    <div class="col-md-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light fw-semibold">
+                <i class="bi bi-info-circle"></i> Project Details
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-5 text-muted small">Status</dt>
+                    <dd class="col-7">
+                        <span class="badge bg-{{ 'success' if project.active else 'secondary' }}">
+                            {{ 'Active' if project.active else 'Inactive' }}
+                        </span>
+                    </dd>
+                    <dt class="col-5 text-muted small">Project Manager</dt>
+                    <dd class="col-7 small">
+                        {{ project.project_manager.username if project.project_manager else '—' }}
+                    </dd>
+                    <dt class="col-5 text-muted small">Created</dt>
+                    <dd class="col-7 small">{{ project.created_at.strftime('%Y-%m-%d') }}</dd>
+                    <dt class="col-5 text-muted small">Facilities</dt>
+                    <dd class="col-7 small">{{ facilities|length }}</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+
+    {# ── Facilities ── #}
+    <div class="col-md-8">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><i class="bi bi-building"></i> Facilities</span>
+            </div>
+            <div class="card-body p-0">
+                {% if facilities %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Name</th>
+                                <th>Address</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for f in facilities %}
+                            <tr>
+                                <td><strong>{{ f.name }}</strong></td>
+                                <td class="text-muted small">{{ f.address or '—' }}</td>
+                                <td>
+                                    <span class="badge bg-{{ 'success' if f.active else 'secondary' }}">
+                                        {{ 'Active' if f.active else 'Inactive' }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('facilities.view_facility', facility_id=f.id) }}"
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="p-3 text-muted small">No facilities linked to this project yet.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# ── Customer Assignments ── #}
+    {% if current_user.role == 'admin' %}
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><i class="bi bi-people"></i> Customer Assignments</span>
+                <a href="{{ url_for('projects.add_assignment', project_id=project.id) }}"
+                   class="btn btn-sm btn-primary">
+                    <i class="bi bi-person-plus"></i> Add Customer
+                </a>
+            </div>
+            <div class="card-body p-0">
+                {% if assignments %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Customer Username</th>
+                                <th>Email</th>
+                                <th>Facility Scope</th>
+                                <th>Assigned</th>
+                                <th width="80"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for a in assignments %}
+                            <tr>
+                                <td><strong>{{ a.user.username }}</strong></td>
+                                <td class="text-muted small">{{ a.user.email }}</td>
+                                <td>
+                                    {% if a.facility %}
+                                    <span class="badge bg-info text-dark">{{ a.facility.name }}</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">All facilities</span>
+                                    {% endif %}
+                                </td>
+                                <td class="small text-muted">{{ a.created_at.strftime('%Y-%m-%d') }}</td>
+                                <td>
+                                    <form method="POST"
+                                          action="{{ url_for('projects.remove_assignment', assignment_id=a.id) }}"
+                                          onsubmit="return confirm('Remove assignment for {{ a.user.username }}?');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger"
+                                                title="Remove assignment">
+                                            <i class="bi bi-person-dash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="p-3 text-muted small">
+                    No customer users assigned yet.
+                    <a href="{{ url_for('projects.add_assignment', project_id=project.id) }}">Add one now.</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}

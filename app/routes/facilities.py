@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from app import db
 from app.models.facility import Facility, Area
+from app.models.project import Project
 from app.utils.forms import FacilityForm, AreaForm
 from app.utils.decorators import supervisor_required, admin_required
 from app.utils.audit import log_action, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE
@@ -19,23 +20,27 @@ def list_facilities():
 @supervisor_required
 def create_facility():
     form = FacilityForm()
-    
+    projects = Project.query.filter_by(active=True).order_by(Project.name).all()
+    form.project_id.choices = [(0, '— None —')] + [(p.id, p.name) for p in projects]
+
     if form.validate_on_submit():
+        project_id = form.project_id.data if form.project_id.data else None
         facility = Facility(
             name=form.name.data,
             address=form.address.data,
             contact_person=form.contact_person.data,
             contact_phone=form.contact_phone.data,
+            project_id=project_id if project_id else None,
             active=form.active.data
         )
-        
+
         db.session.add(facility)
         db.session.commit()
         log_action(ACTION_CREATE, 'Facility', facility.id, facility.name,
-                   f'contact={facility.contact_person or ""}; active={facility.active}')
+                   f'contact={facility.contact_person or ""}; project_id={facility.project_id}; active={facility.active}')
         flash(f'Facility "{facility.name}" created successfully.', 'success')
         return redirect(url_for('facilities.view_facility', facility_id=facility.id))
-    
+
     return render_template('facilities/form.html', form=form, title='Create Facility')
 
 @bp.route('/<int:facility_id>')
@@ -51,20 +56,24 @@ def view_facility(facility_id):
 def edit_facility(facility_id):
     facility = Facility.query.get_or_404(facility_id)
     form = FacilityForm(obj=facility)
-    
+    projects = Project.query.filter_by(active=True).order_by(Project.name).all()
+    form.project_id.choices = [(0, '— None —')] + [(p.id, p.name) for p in projects]
+
     if form.validate_on_submit():
+        project_id = form.project_id.data if form.project_id.data else None
         facility.name = form.name.data
         facility.address = form.address.data
         facility.contact_person = form.contact_person.data
         facility.contact_phone = form.contact_phone.data
+        facility.project_id = project_id if project_id else None
         facility.active = form.active.data
-        
+
         db.session.commit()
         log_action(ACTION_UPDATE, 'Facility', facility.id, facility.name,
-                   f'active={facility.active}')
+                   f'project_id={facility.project_id}; active={facility.active}')
         flash(f'Facility "{facility.name}" updated successfully.', 'success')
         return redirect(url_for('facilities.view_facility', facility_id=facility.id))
-    
+
     return render_template('facilities/form.html', form=form, facility=facility, title='Edit Facility')
 
 @bp.route('/<int:facility_id>/delete', methods=['POST'])

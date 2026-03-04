@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
@@ -12,32 +11,26 @@
             <div class="card-body">
                 <form method="POST">
                     {{ form.hidden_tag() }}
-                    
+
                     <div class="mb-3">
                         {{ form.name.label(class="form-label") }}
                         {{ form.name(class="form-control") }}
-                    </div>
-                    
-                    <div class="mb-3">
-                        {{ form.address.label(class="form-label") }}
-                        {{ form.address(class="form-control", rows=3) }}
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            {{ form.contact_person.label(class="form-label") }}
-                            {{ form.contact_person(class="form-control") }}
+                        {% if form.name.errors %}
+                        <div class="text-danger small mt-1">
+                            {% for e in form.name.errors %}{{ e }}{% endfor %}
                         </div>
-                        <div class="col-md-6 mb-3">
-                            {{ form.contact_phone.label(class="form-label") }}
-                            {{ form.contact_phone(class="form-control") }}
-                        </div>
+                        {% endif %}
                     </div>
 
                     <div class="mb-3">
-                        {{ form.project_id.label(class="form-label") }}
-                        {{ form.project_id(class="form-select") }}
-                        <div class="form-text">Link this facility to a project for customer portal access.</div>
+                        {{ form.description.label(class="form-label") }}
+                        {{ form.description(class="form-control", rows=3) }}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.project_manager_id.label(class="form-label") }}
+                        {{ form.project_manager_id(class="form-select") }}
+                        <div class="form-text">Only users with the Project Manager role are listed.</div>
                     </div>
 
                     <div class="mb-4">
@@ -46,12 +39,12 @@
                             {{ form.active.label(class="form-check-label") }}
                         </div>
                     </div>
-                    
+
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-save"></i> Save Facility
+                            <i class="bi bi-save"></i> Save Project
                         </button>
-                        <a href="{{ url_for('facilities.list_facilities') }}" class="btn btn-secondary">
+                        <a href="{{ url_for('projects.index') }}" class="btn btn-secondary">
                             <i class="bi bi-x-circle"></i> Cancel
                         </a>
                     </div>
