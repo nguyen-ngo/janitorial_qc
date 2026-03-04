@@ -189,3 +189,37 @@ class ProjectForm(FlaskForm):
 class CustomerAssignmentForm(FlaskForm):
     user_id     = SelectField('Customer User', coerce=int, validators=[DataRequired()])
     facility_id = SelectField('Facility Scope', coerce=int, validators=[Optional()])
+
+
+class CustomerUserForm(FlaskForm):
+    """Create / edit a customer-role user account.
+    Used exclusively in the Customer Management UI.
+    Password is required on create; optional on edit.
+    """
+    username         = StringField('Username', validators=[DataRequired(), Length(min=3, max=100)])
+    email            = StringField('Email',    validators=[DataRequired(), Email(), Length(max=255)])
+    password         = PasswordField('Password', validators=[Optional(), Length(min=8)])
+    confirm_password = PasswordField('Confirm Password',
+                                     validators=[Optional(), EqualTo('password',
+                                                 message='Passwords must match.')])
+
+    def __init__(self, user=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._user = user  # existing user instance (edit mode) or None (create mode)
+
+    def validate_username(self, field):
+        from app.models.user import User
+        existing = User.query.filter_by(username=field.data).first()
+        if existing and (self._user is None or existing.id != self._user.id):
+            raise ValidationError('Username already in use.')
+
+    def validate_email(self, field):
+        from app.models.user import User
+        existing = User.query.filter_by(email=field.data).first()
+        if existing and (self._user is None or existing.id != self._user.id):
+            raise ValidationError('Email address already in use.')
+
+    def validate_password(self, field):
+        """Password is required when creating a new account."""
+        if self._user is None and not field.data:
+            raise ValidationError('Password is required for new accounts.')

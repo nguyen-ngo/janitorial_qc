@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+{% block title %}{{ customer.username }} — Customer Portal{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-center">
+  <div class="col">
+    <h2>
+      <i class="bi bi-person-badge"></i> {{ customer.username }}
+      {% if not customer.active %}
+      <span class="badge bg-secondary ms-2 fs-6">Disabled</span>
+      {% else %}
+      <span class="badge bg-success ms-2 fs-6">Active</span>
+      {% endif %}
+    </h2>
+    <p class="text-muted mb-0 small">{{ customer.email }}</p>
+  </div>
+  <div class="col-auto d-flex gap-2">
+    <a href="{{ url_for('customers.edit', customer_id=customer.id) }}"
+       class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-pencil"></i> Edit Account
+    </a>
+    <form method="POST"
+          action="{{ url_for('customers.toggle_active', customer_id=customer.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit"
+              class="btn btn-sm {{ 'btn-outline-warning' if customer.active else 'btn-outline-success' }}"
+              onclick="return confirm('{{ 'Disable' if customer.active else 'Enable' }} {{ customer.username }}?')">
+        <i class="bi bi-{{ 'person-slash' if customer.active else 'person-check' }} me-1"></i>
+        {{ 'Disable' if customer.active else 'Enable' }}
+      </button>
+    </form>
+    <a href="{{ url_for('customers.index') }}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-arrow-left"></i> All Customers
+    </a>
+  </div>
+</div>
+
+<div class="row g-4">
+
+  {# ── Left column: account info + scoped facilities ── #}
+  <div class="col-md-4">
+
+    <div class="card shadow-sm mb-3">
+      <div class="card-header bg-light fw-semibold">
+        <i class="bi bi-person-circle me-1"></i> Account Details
+      </div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-5 text-muted">Username</dt>
+          <dd class="col-7">{{ customer.username }}</dd>
+          <dt class="col-5 text-muted">Email</dt>
+          <dd class="col-7">{{ customer.email }}</dd>
+          <dt class="col-5 text-muted">Status</dt>
+          <dd class="col-7">
+            <span class="badge bg-{{ 'success' if customer.active else 'secondary' }}">
+              {{ 'Active' if customer.active else 'Disabled' }}
+            </span>
+          </dd>
+          <dt class="col-5 text-muted">Created</dt>
+          <dd class="col-7">{{ customer.created_at.strftime('%Y-%m-%d') }}</dd>
+          <dt class="col-5 text-muted">Assignments</dt>
+          <dd class="col-7">{{ assignments|length }}</dd>
+          <dt class="col-5 text-muted">Facilities</dt>
+          <dd class="col-7">{{ facilities|length }}</dd>
+        </dl>
+      </div>
+    </div>
+
+    {# ── Scoped facilities ── #}
+    <div class="card shadow-sm">
+      <div class="card-header bg-light fw-semibold">
+        <i class="bi bi-building me-1"></i> Accessible Facilities
+      </div>
+      {% if facilities %}
+      <div class="card-body p-0">
+        <ul class="list-group list-group-flush">
+          {% for f in facilities %}
+          <li class="list-group-item d-flex justify-content-between align-items-center
+                     py-2 px-3 small">
+            <span>
+              <i class="bi bi-building text-muted me-1"></i>{{ f.name }}
+            </span>
+            {% if f.project %}
+            <span class="badge bg-primary" style="font-size:.65rem;">{{ f.project.name }}</span>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% else %}
+      <div class="card-body text-muted small">
+        No facilities accessible yet — add an assignment below.
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+
+  {# ── Right column: assignments ── #}
+  <div class="col-md-8">
+
+    {# ── Current assignments table ── #}
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-light fw-semibold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-diagram-3 me-1"></i> Project Assignments</span>
+      </div>
+      {% if assignments %}
+      <div class="card-body p-0">
+        <table class="table table-hover table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Project</th>
+              <th>Facility Scope</th>
+              <th>Assigned</th>
+              <th width="60"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for a in assignments %}
+            <tr>
+              <td class="small">
+                <a href="{{ url_for('projects.view', project_id=a.project_id) }}"
+                   class="text-decoration-none">
+                  {{ a.project.name }}
+                </a>
+              </td>
+              <td>
+                {% if a.facility %}
+                <span class="badge bg-info text-dark small">{{ a.facility.name }}</span>
+                {% else %}
+                <span class="badge bg-secondary small">All facilities</span>
+                {% endif %}
+              </td>
+              <td class="text-muted small">{{ a.created_at.strftime('%Y-%m-%d') }}</td>
+              <td>
+                <form method="POST"
+                      action="{{ url_for('customers.remove_assignment', assignment_id=a.id) }}"
+                      onsubmit="return confirm('Remove this assignment?');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn btn-sm btn-outline-danger"
+                          title="Remove">
+                    <i class="bi bi-x-lg"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body text-muted small">No assignments yet.</div>
+      {% endif %}
+    </div>
+
+    {# ── Add assignment form ── #}
+    <div class="card shadow-sm">
+      <div class="card-header bg-light fw-semibold">
+        <i class="bi bi-plus-circle me-1"></i> Add Assignment
+      </div>
+      <div class="card-body">
+        <form method="POST"
+              action="{{ url_for('customers.add_assignment', customer_id=customer.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="row g-3 align-items-end">
+            <div class="col-md-5">
+              <label class="form-label small fw-semibold">Project</label>
+              <select name="project_id" id="proj-select" class="form-select form-select-sm"
+                      required>
+                <option value="">— Select project —</option>
+                {% for p in projects %}
+                <option value="{{ p.id }}">{{ p.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-5">
+              <label class="form-label small fw-semibold">Facility Scope</label>
+              <select name="facility_id" id="fac-select" class="form-select form-select-sm">
+                <option value="">— All facilities in project —</option>
+              </select>
+              <div class="form-text" style="font-size:.72rem;">
+                Leave blank to grant access to all facilities in the project.
+              </div>
+            </div>
+            <div class="col-md-2">
+              <button type="submit" class="btn btn-primary btn-sm w-100">
+                <i class="bi bi-plus-circle me-1"></i> Add
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  const projSelect = document.getElementById('proj-select');
+  const facSelect  = document.getElementById('fac-select');
+
+  projSelect.addEventListener('change', function () {
+    const projectId = this.value;
+    facSelect.innerHTML = '<option value="">— All facilities in project —</option>';
+
+    if (!projectId) return;
+
+    fetch('/customers/facilities-for-project/' + projectId, { credentials: 'same-origin' })
+      .then(r => r.json())
+      .then(data => {
+        data.forEach(function (f) {
+          const opt = document.createElement('option');
+          opt.value       = f.id;
+          opt.textContent = f.name;
+          facSelect.appendChild(opt);
+        });
+      })
+      .catch(function () {});
+  });
+}());
+</script>
+{% endblock %}
