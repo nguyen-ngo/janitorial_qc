@@ -39,6 +39,9 @@ def login():
         user = User.query.filter_by(username=form.username.data).first()
 
         if user and user.check_password(form.password.data):
+            if not user.active:
+                flash('Your account has been disabled. Please contact an administrator.', 'danger')
+                return render_template('auth/login.html', form=form)
             login_user(user, remember=form.remember_me.data)
             # Use validated next URL — never redirect blindly to request.args['next']
             next_page = _safe_next(request.args.get('next'))
@@ -203,3 +206,28 @@ def delete_user(user_id):
     log_action(ACTION_DELETE, 'User', user_id, username)
     flash(f'User {username} deleted successfully.', 'success')
     return redirect(url_for('auth.list_users'))
+
+@bp.route('/users/<int:user_id>/toggle-active', methods=['POST'])
+@login_required
+@admin_required
+def toggle_active(user_id):
+    user = User.query.get_or_404(user_id)
+
+    if user.id == current_user.id:
+        flash('You cannot disable your own account.', 'danger')
+        return redirect(url_for('auth.list_users'))
+
+    user.active = not user.active
+    db.session.commit()
+
+    action_label = 'enabled' if user.active else 'disabled'
+    logger.info(
+        'AUTH | user_%s | admin_id=%s admin=%s target_user=%s',
+        action_label, current_user.id, current_user.username, user.username,
+    )
+    log_action(
+        ACTION_UPDATE, 'User', user.id, user.username,
+        f'account {action_label} by {current_user.username}',
+    )
+    flash(f'User {user.username} has been {action_label}.', 'success')
+    return redirect(request.referrer or url_for('auth.list_users'))

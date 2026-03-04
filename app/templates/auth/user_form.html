@@ -10,6 +10,12 @@
                 <h4 class="mb-0">{{ title }}</h4>
             </div>
             <div class="card-body">
+                {% if user and not user.active %}
+                <div class="alert alert-warning d-flex align-items-center gap-2 mb-4">
+                  <i class="bi bi-person-slash fs-5 flex-shrink-0"></i>
+                  <span>This account is currently <strong>disabled</strong>. The user cannot log in.</span>
+                </div>
+                {% endif %}
                 <form method="POST">
                     {{ form.hidden_tag() }}
                     
@@ -62,6 +68,33 @@
                         {{ form.role(class="form-select") }}
                     </div>
                     
+                    {% if user and user.id != current_user.id %}
+                    <div class="mb-4">
+                        <label class="form-label fw-semibold">Account Status</label>
+                        <div class="d-flex align-items-center gap-3">
+                            <span class="badge fs-6 bg-{{ 'success' if user.active else 'secondary' }}">
+                                {{ 'Active' if user.active else 'Disabled' }}
+                            </span>
+                            <form method="POST" action="{{ url_for('auth.toggle_active', user_id=user.id) }}" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit"
+                                        class="btn btn-sm {{ 'btn-outline-secondary' if user.active else 'btn-outline-success' }}"
+                                        onclick="return confirm('{{ 'Disable' if user.active else 'Enable' }} user {{ user.username }}?')">
+                                    <i class="bi bi-{{ 'person-slash' if user.active else 'person-check' }} me-1"></i>
+                                    {{ 'Disable Account' if user.active else 'Enable Account' }}
+                                </button>
+                            </form>
+                        </div>
+                        <div class="form-text">
+                            {% if user.active %}
+                            Disabling this account will immediately prevent the user from logging in.
+                            {% else %}
+                            Enabling this account will restore the user's ability to log in.
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">
                             <i class="bi bi-save"></i> Save User

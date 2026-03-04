@@ -24,12 +24,13 @@
                         <th>Email</th>
                         <th>Role</th>
                         <th>Created</th>
-                        <th width="150">Actions</th>
+                        <th>Status</th>
+                        <th width="180">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for user in users %}
-                    <tr>
+                    <tr class="{{ 'table-secondary text-muted' if not user.active else '' }}">
                         <td><strong>{{ user.username }}</strong></td>
                         <td>{{ user.email }}</td>
                         <td>
@@ -39,12 +40,29 @@
                         </td>
                         <td>{{ user.created_at.strftime('%Y-%m-%d') }}</td>
                         <td>
-                            <a href="{{ url_for('auth.edit_user', user_id=user.id) }}" class="btn btn-sm btn-outline-primary">
+                            {% if user.active %}
+                            <span class="badge bg-success">Active</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Disabled</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('auth.edit_user', user_id=user.id) }}" class="btn btn-sm btn-outline-primary" title="Edit">
                                 <i class="bi bi-pencil"></i>
                             </a>
                             {% if user.id != current_user.id %}
+                            <form method="POST" action="{{ url_for('auth.toggle_active', user_id=user.id) }}" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit"
+                                        class="btn btn-sm {{ 'btn-outline-secondary' if user.active else 'btn-outline-success' }}"
+                                        title="{{ 'Disable' if user.active else 'Enable' }}"
+                                        onclick="return confirm('{{ 'Disable' if user.active else 'Enable' }} user {{ user.username }}?')">
+                                    <i class="bi bi-{{ 'person-slash' if user.active else 'person-check' }}"></i>
+                                </button>
+                            </form>
                             <form method="POST" action="{{ url_for('auth.delete_user', user_id=user.id) }}" class="d-inline" onsubmit="return confirm('Delete this user?');">
-                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
                                     <i class="bi bi-trash"></i>
                                 </button>
                             </form>
