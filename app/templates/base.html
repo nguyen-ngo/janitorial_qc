@@ -60,14 +60,14 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('dashboard.index') }}">Dashboard</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('facilities.list_facilities') }}">Facilities</a>
-                    </li>
                     {% if current_user.role in ['admin', 'supervisor', 'project_manager'] %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('projects.index') }}">Projects</a>
                     </li>
                     {% endif %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('facilities.list_facilities') }}">Facilities</a>
+                    </li>
                     {% if current_user.role != 'customer' %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('templates.index') }}">Templates</a>
