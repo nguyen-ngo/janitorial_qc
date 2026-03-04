@@ -51,19 +51,25 @@ class Issue(db.Model):
     severity      = db.Column(db.Enum('low', 'medium', 'high', 'critical'), nullable=False)
     description   = db.Column(db.Text, nullable=False)
     photo_path    = db.Column(db.String(255))
-    status        = db.Column(db.Enum('open', 'in_progress', 'resolved'), default='open')
+    status        = db.Column(db.Enum('open', 'in_progress', 'resolved', 'pending_verification'), default='open')
     assigned_to   = db.Column(db.Integer, db.ForeignKey('users.id'))
     reported_at   = db.Column(db.DateTime, default=now_eastern)
     resolved_at   = db.Column(db.DateTime)
     result_notes  = db.Column(db.Text)
     result_photos = db.Column(db.JSON)   # list of relative paths e.g. ["uploads/issue_photos/abc.jpg"]
 
+    # ── Resolution verification ──────────────────────────────────────────
+    verified_by        = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    verified_at        = db.Column(db.DateTime, nullable=True)
+    verification_note  = db.Column(db.Text, nullable=True)
+
     # Tracks which SLA alert level has already been notified so cron runs
     # don't fire duplicate notifications. Values: None / 'at_risk' / 'breached'
     sla_notified  = db.Column(db.String(10), nullable=True, default=None)
 
     # Relationships
-    assigned_user = db.relationship('User', foreign_keys=[assigned_to], backref='assigned_issues')
+    assigned_user  = db.relationship('User', foreign_keys=[assigned_to], backref='assigned_issues')
+    verifier       = db.relationship('User', foreign_keys=[verified_by], backref='verified_issues')
     comments      = db.relationship('IssueComment', backref='issue', lazy='dynamic',
                                     order_by='IssueComment.created_at',
                                     cascade='all, delete-orphan')

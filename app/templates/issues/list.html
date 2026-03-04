@@ -71,7 +71,7 @@
             </td>
             <td>{{ issue.description[:60] }}{% if issue.description|length > 60 %}…{% endif %}</td>
             <td>
-              <span class="badge bg-{{ 'success' if issue.status == 'resolved' else 'warning text-dark' if issue.status == 'in_progress' else 'danger' }}">
+              <span class="badge bg-{{ 'success' if issue.status == 'resolved' else 'info text-dark' if issue.status == 'pending_verification' else 'warning text-dark' if issue.status == 'in_progress' else 'danger' }}">
                 {{ issue.status|replace('_',' ')|title }}
               </span>
             </td>

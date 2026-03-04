@@ -1,0 +1,275 @@
+{% extends "base.html" %}
+{% block title %}{{ facility.name }} — Scorecard{% endblock %}
+{% block extra_css %}
+<style>
+.kpi-card { border-left: 4px solid; }
+.kpi-blue   { border-color: #2563eb; }
+.kpi-green  { border-color: #16a34a; }
+.kpi-yellow { border-color: #d97706; }
+.kpi-red    { border-color: #dc2626; }
+.chart-container { position: relative; height: 260px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-4">
+  <div>
+    <h2><i class="bi bi-speedometer2 text-primary me-2"></i>{{ facility.name }}</h2>
+    <p class="text-muted mb-0">Facility Scorecard — last {{ days }} days</p>
+  </div>
+  <div class="d-flex gap-2 align-items-center">
+    {# Period selector #}
+    <div class="btn-group btn-group-sm" role="group">
+      {% for d, label in [(30,'30d'),(60,'60d'),(90,'90d'),(180,'180d'),(365,'1yr')] %}
+      <a href="{{ url_for('reports.facility_scorecard', facility_id=facility.id, days=d) }}"
+         class="btn btn-outline-secondary {{ 'active' if days == d else '' }}">{{ label }}</a>
+      {% endfor %}
+    </div>
+    <a href="{{ url_for('reports.facility_report', facility_id=facility.id) }}"
+       class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-file-text"></i> Full Report
+    </a>
+    <a href="{{ url_for('reports.index') }}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left"></i> Reports
+    </a>
+  </div>
+</div>
+
+{# ── KPI row ── #}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card shadow-sm kpi-card kpi-blue h-100">
+      <div class="card-body">
+        <div class="text-muted small fw-semibold mb-1">Total Inspections</div>
+        <div class="fs-2 fw-bold">{{ total_inspections }}</div>
+        <div class="text-muted small">{{ completed_insp }} completed</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card shadow-sm kpi-card {{ 'kpi-green' if avg_score and avg_score >= 80 else 'kpi-yellow' if avg_score and avg_score >= 60 else 'kpi-red' }} h-100">
+      <div class="card-body">
+        <div class="text-muted small fw-semibold mb-1">Avg Score</div>
+        <div class="fs-2 fw-bold">{{ avg_score|round(1) if avg_score else '—' }}{% if avg_score %}%{% endif %}</div>
+        <div class="text-muted small">{{ days }}-day average</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card shadow-sm kpi-card {{ 'kpi-green' if sla_pct and sla_pct >= 90 else 'kpi-yellow' if sla_pct else 'kpi-red' }} h-100">
+      <div class="card-body">
+        <div class="text-muted small fw-semibold mb-1">SLA Compliance</div>
+        <div class="fs-2 fw-bold">{{ sla_pct|round(1) if sla_pct is not none else '—' }}{% if sla_pct is not none %}%{% endif %}</div>
+        <div class="text-muted small">{{ sla_met }}/{{ sla_total }} closed on time</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card shadow-sm kpi-card {{ 'kpi-red' if open_issues|length > 0 else 'kpi-green' }} h-100">
+      <div class="card-body">
+        <div class="text-muted small fw-semibold mb-1">Open Issues</div>
+        <div class="fs-2 fw-bold">{{ open_issues|length }}</div>
+        <div class="text-muted small">
+          {% if pending_verification > 0 %}
+          <span class="text-warning">{{ pending_verification }} pending verification</span>
+          {% else %}
+          across all severities
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+
+  {# ── Score trend chart ── #}
+  <div class="col-md-8">
+    <div class="card shadow-sm">
+      <div class="card-header bg-light fw-semibold">
+        <i class="bi bi-graph-up me-1"></i> Score Trend
+      </div>
+      <div class="card-body">
+        {% if trend_labels %}
+        <div class="chart-container">
+          <canvas id="trendChart"></canvas>
+        </div>
+        {% else %}
+        <p class="text-muted text-center py-4 mb-0">No completed inspections in this period.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# ── Issue severity breakdown ── #}
+  <div class="col-md-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-light fw-semibold">
+        <i class="bi bi-exclamation-triangle me-1"></i> Open Issues by Severity
+      </div>
+      <div class="card-body">
+        {% for sev, color in [('critical','danger'),('high','danger'),('medium','warning'),('low','secondary')] %}
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="badge bg-{{ color }} {{ 'text-dark' if color == 'warning' else '' }}">
+            {{ sev|title }}
+          </span>
+          <span class="fw-bold fs-5">{{ sev_counts.get(sev, 0) }}</span>
+        </div>
+        {% endfor %}
+        {% if pending_verification > 0 %}
+        <hr class="my-2">
+        <div class="d-flex justify-content-between align-items-center">
+          <span class="badge bg-info text-dark">Pending Verification</span>
+          <span class="fw-bold fs-5">{{ pending_verification }}</span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# ── Area scores ── #}
+  {% if area_scores %}
+  <div class="col-md-6">
+    <div class="card shadow-sm">
+      <div class="card-header bg-light fw-semibold">
+        <i class="bi bi-building me-1"></i> Score by Area
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead class="table-light">
+            <tr><th>Area</th><th class="text-center">Avg Score</th><th class="text-center">Inspections</th></tr>
+          </thead>
+          <tbody>
+            {% for a in area_scores %}
+            <tr>
+              <td>{{ a.name }}</td>
+              <td class="text-center">
+                <span class="badge bg-{{ 'success' if a.avg >= 80 else 'warning text-dark' if a.avg >= 60 else 'danger' }}">
+                  {{ a.avg|round(1) }}%
+                </span>
+              </td>
+              <td class="text-center text-muted small">{{ a.count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Follow-up required ── #}
+  {% if followup_required %}
+  <div class="col-md-6">
+    <div class="card shadow-sm border-warning">
+      <div class="card-header bg-warning text-dark fw-semibold">
+        <i class="bi bi-arrow-repeat me-1"></i> Follow-up Required
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead class="table-light">
+            <tr><th>Inspection</th><th>Date</th><th>Score</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for insp in followup_required %}
+            <tr>
+              <td>#{{ insp.id }} — {{ insp.template.name }}</td>
+              <td class="text-muted small">{{ insp.inspection_date.strftime('%Y-%m-%d') }}</td>
+              <td>
+                {% if insp.overall_score %}
+                <span class="badge bg-{{ 'success' if insp.overall_score >= 80 else 'warning text-dark' if insp.overall_score >= 60 else 'danger' }}">
+                  {{ insp.overall_score|round(1) }}%
+                </span>
+                {% else %}—{% endif %}
+              </td>
+              <td>
+                <a href="{{ url_for('inspections.view', inspection_id=insp.id) }}"
+                   class="btn btn-xs btn-outline-secondary btn-sm">View</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Open issues list ── #}
+  {% if open_issues %}
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header bg-light fw-semibold">
+        <i class="bi bi-bug me-1"></i> Open Issues
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light">
+            <tr><th>ID</th><th>Severity</th><th>Area</th><th>Description</th><th>Status</th><th>Reported</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for issue in open_issues %}
+            <tr>
+              <td class="text-muted small">#{{ issue.id }}</td>
+              <td>
+                <span class="badge bg-{{ 'danger' if issue.severity in ['critical','high'] else 'warning text-dark' if issue.severity == 'medium' else 'secondary' }}">
+                  {{ issue.severity|title }}
+                </span>
+              </td>
+              <td class="small">{{ issue.area.name }}</td>
+              <td class="small">{{ issue.description[:80] }}{% if issue.description|length > 80 %}…{% endif %}</td>
+              <td>
+                <span class="badge bg-{{ 'info text-dark' if issue.status == 'pending_verification' else 'warning text-dark' if issue.status == 'in_progress' else 'secondary' }}">
+                  {{ issue.status|replace('_',' ')|title }}
+                </span>
+              </td>
+              <td class="text-muted small">{{ issue.reported_at.strftime('%Y-%m-%d') }}</td>
+              <td>
+                <a href="{{ url_for('issues.view', issue_id=issue.id) }}"
+                   class="btn btn-sm btn-outline-secondary">View</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+{% if trend_labels %}
+(function () {
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: {{ trend_labels | tojson }},
+      datasets: [{
+        label: 'Avg Score (%)',
+        data:  {{ trend_data | tojson }},
+        borderColor: '#2563eb',
+        backgroundColor: 'rgba(37,99,235,.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 3,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { min: 0, max: 100, ticks: { callback: v => v + '%' } }
+      }
+    }
+  });
+}());
+{% endif %}
+</script>
+{% endblock %}

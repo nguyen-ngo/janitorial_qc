@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Scheduled Reports{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2><i class="bi bi-calendar-check"></i> Scheduled Reports</h2>
+  <a href="{{ url_for('scheduled_reports.create') }}" class="btn btn-primary">
+    <i class="bi bi-plus-circle"></i> New Schedule
+  </a>
+</div>
+
+{% if reports %}
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Name</th><th>Type</th><th>Frequency</th><th>Facility</th>
+            <th>Recipients</th><th>Next Send</th><th>Last Sent</th>
+            <th>Status</th><th width="160"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in reports %}
+          <tr class="{{ 'text-muted' if not r.active else '' }}">
+            <td><strong>{{ r.name }}</strong></td>
+            <td><span class="badge bg-secondary">{{ r.report_type|title }}</span></td>
+            <td>{{ r.frequency|title }}</td>
+            <td>{{ r.facility.name if r.facility else '— All —' }}</td>
+            <td>
+              <span title="{{ r.recipient_list()|join(', ') }}">
+                {{ r.recipient_list()|length }} recipient{{ 's' if r.recipient_list()|length != 1 else '' }}
+              </span>
+            </td>
+            <td class="small text-muted">
+              {{ r.next_send_at.strftime('%Y-%m-%d %H:%M') if r.next_send_at else '—' }}
+            </td>
+            <td class="small text-muted">
+              {{ r.last_sent_at.strftime('%Y-%m-%d %H:%M') if r.last_sent_at else 'Never' }}
+            </td>
+            <td>
+              {% if r.active %}<span class="badge bg-success">Active</span>
+              {% else %}<span class="badge bg-secondary">Paused</span>{% endif %}
+            </td>
+            <td class="text-end">
+              <a href="{{ url_for('scheduled_reports.edit', report_id=r.id) }}"
+                 class="btn btn-sm btn-outline-secondary" title="Edit">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <form method="POST"
+                    action="{{ url_for('scheduled_reports.send_now', report_id=r.id) }}"
+                    class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-outline-primary" title="Send Now"
+                        onclick="return confirm('Send this report now?')">
+                  <i class="bi bi-send"></i>
+                </button>
+              </form>
+              <form method="POST"
+                    action="{{ url_for('scheduled_reports.delete', report_id=r.id) }}"
+                    class="d-inline"
+                    onsubmit="return confirm('Delete this scheduled report?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+                  <i class="bi bi-trash3"></i>
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="card shadow-sm">
+  <div class="card-body text-center py-5 text-muted">
+    <i class="bi bi-calendar-x fs-1 d-block mb-3 opacity-25"></i>
+    <p class="mb-3">No scheduled reports configured yet.</p>
+    <a href="{{ url_for('scheduled_reports.create') }}" class="btn btn-primary">
+      <i class="bi bi-plus-circle"></i> Create First Schedule
+    </a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -71,6 +71,11 @@
               <span class="badge bg-{{ 'success' if ins.status == 'completed' else 'danger' if ins.status == 'flagged' else 'secondary' }}">
                 {{ ins.status|replace('_',' ')|title }}
               </span>
+              {% if ins.follow_up_required and not ins.follow_ups.count() %}
+              <span class="badge bg-danger ms-1" title="Follow-up re-inspection required">
+                <i class="bi bi-arrow-repeat"></i> Follow-up
+              </span>
+              {% endif %}
             </td>
             <td class="text-nowrap">
               {% if ins.status == 'in_progress' or ins.status == 'flagged' %}

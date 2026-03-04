@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<body style="font-family:Arial,sans-serif;color:#333;max-width:640px;margin:auto;">
+  <div style="background:#1a1d23;padding:20px 28px;border-radius:8px 8px 0 0;">
+    <h2 style="color:#fff;margin:0;font-size:1.1rem;">
+      <span style="color:#93c5fd;">&#128203;</span>
+      {{ report.frequency|title }} Report — {{ report.name }}
+    </h2>
+    <p style="color:#94a3b8;font-size:.8rem;margin:4px 0 0;">
+      {{ start.strftime('%b %d, %Y') }} — {{ end.strftime('%b %d, %Y') }}
+      {% if facility %} · {{ facility.name }}{% endif %}
+    </p>
+  </div>
+
+  <div style="background:#fff;border:1px solid #e2e8f0;border-top:none;
+              border-radius:0 0 8px 8px;padding:24px;">
+
+  {# ── Summary / Facility type ── #}
+  {% if report.report_type in ('summary','facility') %}
+
+    {# KPI row #}
+    <table width="100%" cellspacing="0" cellpadding="0" style="margin-bottom:24px;">
+      <tr>
+        <td align="center" style="padding:12px;background:#f1f5f9;border-radius:8px;">
+          <div style="font-size:1.6rem;font-weight:700;color:#1d4ed8;">{{ total_inspections }}</div>
+          <div style="font-size:.75rem;color:#64748b;">Inspections</div>
+        </td>
+        <td width="12"></td>
+        <td align="center" style="padding:12px;background:#f0fdf4;border-radius:8px;">
+          <div style="font-size:1.6rem;font-weight:700;color:#15803d;">{{ completed }}</div>
+          <div style="font-size:.75rem;color:#64748b;">Completed</div>
+        </td>
+        <td width="12"></td>
+        <td align="center" style="padding:12px;background:#fef3c7;border-radius:8px;">
+          <div style="font-size:1.6rem;font-weight:700;color:#b45309;">{{ open_issues }}</div>
+          <div style="font-size:.75rem;color:#64748b;">Open Issues</div>
+        </td>
+        <td width="12"></td>
+        <td align="center" style="padding:12px;background:#f0f9ff;border-radius:8px;">
+          <div style="font-size:1.6rem;font-weight:700;color:#0369a1;">
+            {{ '%.1f'|format(avg_score) ~ '%' if avg_score else '—' }}
+          </div>
+          <div style="font-size:.75rem;color:#64748b;">Avg Score</div>
+        </td>
+      </tr>
+    </table>
+
+    {% if facility_scores %}
+    <h3 style="font-size:.9rem;border-bottom:1px solid #e2e8f0;padding-bottom:6px;">
+      Facility Scores
+    </h3>
+    <table width="100%" style="border-collapse:collapse;font-size:.85rem;margin-bottom:20px;">
+      <thead>
+        <tr style="background:#f8fafc;">
+          <th style="text-align:left;padding:6px 8px;">Facility</th>
+          <th style="text-align:center;padding:6px 8px;">Inspections</th>
+          <th style="text-align:center;padding:6px 8px;">Avg Score</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in facility_scores %}
+        <tr style="border-bottom:1px solid #f1f5f9;">
+          <td style="padding:6px 8px;">{{ row.name }}</td>
+          <td style="padding:6px 8px;text-align:center;">{{ row.count }}</td>
+          <td style="padding:6px 8px;text-align:center;">
+            <span style="font-weight:600;color:{{ '#15803d' if row.avg >= 90 else '#b45309' if row.avg >= 70 else '#dc2626' }}">
+              {{ '%.1f'|format(row.avg) }}%
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+
+    {% if critical_issues %}
+    <h3 style="font-size:.9rem;border-bottom:1px solid #e2e8f0;padding-bottom:6px;color:#dc2626;">
+      &#9888; Open Critical / High Issues
+    </h3>
+    <table width="100%" style="border-collapse:collapse;font-size:.82rem;margin-bottom:20px;">
+      <thead>
+        <tr style="background:#fef2f2;">
+          <th style="text-align:left;padding:6px 8px;">Issue</th>
+          <th style="text-align:left;padding:6px 8px;">Severity</th>
+          <th style="text-align:left;padding:6px 8px;">Facility / Area</th>
+          <th style="text-align:left;padding:6px 8px;">Reported</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in critical_issues %}
+        <tr style="border-bottom:1px solid #fee2e2;">
+          <td style="padding:6px 8px;">
+            <a href="{{ base_url }}/issues/{{ i.id }}" style="color:#1d4ed8;">#{{ i.id }}</a>
+            — {{ i.description[:60] }}{% if i.description|length > 60 %}…{% endif %}
+          </td>
+          <td style="padding:6px 8px;font-weight:600;color:#dc2626;">{{ i.severity|title }}</td>
+          <td style="padding:6px 8px;">{{ i.area.facility.name }} / {{ i.area.name }}</td>
+          <td style="padding:6px 8px;color:#64748b;">{{ i.reported_at.strftime('%b %d') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+
+  {% elif report.report_type == 'issues' %}
+
+    {% if issues %}
+    <h3 style="font-size:.9rem;border-bottom:1px solid #e2e8f0;padding-bottom:6px;">
+      Open Issues ({{ issues|length }})
+    </h3>
+    <table width="100%" style="border-collapse:collapse;font-size:.82rem;">
+      <thead>
+        <tr style="background:#f8fafc;">
+          <th style="padding:6px 8px;">#</th>
+          <th style="padding:6px 8px;">Severity</th>
+          <th style="padding:6px 8px;">Facility / Area</th>
+          <th style="padding:6px 8px;">Description</th>
+          <th style="padding:6px 8px;">Status</th>
+          <th style="padding:6px 8px;">Reported</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for i in issues %}
+        <tr style="border-bottom:1px solid #f1f5f9;">
+          <td style="padding:6px 8px;">
+            <a href="{{ base_url }}/issues/{{ i.id }}" style="color:#1d4ed8;">#{{ i.id }}</a>
+          </td>
+          <td style="padding:6px 8px;font-weight:600;color:{{ '#dc2626' if i.severity in ['critical','high'] else '#b45309' if i.severity == 'medium' else '#64748b' }}">
+            {{ i.severity|title }}
+          </td>
+          <td style="padding:6px 8px;">{{ i.area.facility.name }} / {{ i.area.name }}</td>
+          <td style="padding:6px 8px;">{{ i.description[:80] }}{% if i.description|length > 80 %}…{% endif %}</td>
+          <td style="padding:6px 8px;">{{ i.status|replace('_',' ')|title }}</td>
+          <td style="padding:6px 8px;color:#64748b;">{{ i.reported_at.strftime('%b %d') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="color:#64748b;">No open issues in this period.</p>
+    {% endif %}
+
+  {% endif %}
+
+    <hr style="border:none;border-top:1px solid #e2e8f0;margin:28px 0 16px;">
+    <p style="font-size:.75rem;color:#94a3b8;">
+      Janitorial QC System — scheduled report. Do not reply to this email.<br>
+      <a href="{{ base_url }}/reports" style="color:#94a3b8;">View full reports dashboard</a>
+    </p>
+  </div>
+</body>
+</html>

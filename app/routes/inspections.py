@@ -191,12 +191,18 @@ def index():
         else:
             q = q.filter(Inspection.facility_id.in_(customer_facility_ids))
 
-    status_filter   = request.args.get('status', '')
-    facility_filter = request.args.get('facility_id', '')
+    status_filter    = request.args.get('status', '')
+    facility_filter  = request.args.get('facility_id', '')
+    follow_up_filter = request.args.get('follow_up', '')
     if status_filter:
         q = q.filter(Inspection.status == status_filter)
     if facility_filter.isdigit():
         q = q.filter(Inspection.facility_id == int(facility_filter))
+    if follow_up_filter == '1':
+        q = q.filter(
+            Inspection.follow_up_required == True,
+            Inspection.status == 'completed',
+        ).filter(~Inspection.follow_ups.any())
 
     inspections = q.paginate(page=page, per_page=20, error_out=False)
     if current_user.role == 'customer':
@@ -209,7 +215,8 @@ def index():
                            inspections=inspections,
                            facilities=facilities,
                            status_filter=status_filter,
-                           facility_filter=facility_filter)
+                           facility_filter=facility_filter,
+                           follow_up_filter=follow_up_filter)
 
 
 # ── Start ─────────────────────────────────────────────────────────────────────
@@ -225,6 +232,14 @@ def start():
     form.template_id.choices = [(t.id, t.name) for t in templates]
     form.facility_id.choices = [(f.id, f.name) for f in facilities]
 
+    # Pre-select template/facility when arriving from reinspect()
+    from flask import session as _session
+    if not form.is_submitted():
+        if _session.get('reinspect_template_id'):
+            form.template_id.data = _session['reinspect_template_id']
+        if _session.get('reinspect_facility_id'):
+            form.facility_id.data = _session['reinspect_facility_id']
+
     selected_fid = form.facility_id.data or (facilities[0].id if facilities else None)
     areas = Area.query.filter_by(facility_id=selected_fid).order_by(Area.name).all() if selected_fid else []
     form.area_id.choices = [(0, '— No specific area —')] + [(a.id, a.name) for a in areas]
@@ -237,14 +252,17 @@ def start():
             flash('This template has no form fields yet. Please build the form in the template editor first.', 'warning')
             return redirect(url_for('inspections.start'))
 
+        from flask import session as _session
+        parent_id = _session.pop('reinspect_parent_id', None)
         inspection = Inspection(
-            template_id     = template.id,
-            facility_id     = form.facility_id.data,
-            area_id         = form.area_id.data or None,
-            inspector_id    = current_user.id,
-            inspection_date = now_eastern(),
-            status          = 'in_progress',
-            notes           = form.notes.data or None,
+            template_id          = template.id,
+            facility_id          = form.facility_id.data,
+            area_id              = form.area_id.data or None,
+            inspector_id         = current_user.id,
+            inspection_date      = now_eastern(),
+            status               = 'in_progress',
+            notes                = form.notes.data or None,
+            parent_inspection_id = parent_id,
         )
         db.session.add(inspection)
         db.session.commit()
@@ -640,6 +658,73 @@ def export_pdf(inspection_id):
         mimetype='application/pdf',
         headers={'Content-Disposition': f'attachment; filename="{filename}"'},
     )
+
+
+# ── Flag / clear follow-up required ──────────────────────────────────────────
+
+@bp.route('/<int:inspection_id>/flag-followup', methods=['POST'])
+@login_required
+@supervisor_required
+def flag_followup(inspection_id):
+    """Mark an inspection as requiring a follow-up re-inspection."""
+    inspection = Inspection.query.get_or_404(inspection_id)
+    note = request.form.get('follow_up_note', '').strip() or None
+
+    inspection.follow_up_required = True
+    inspection.follow_up_note     = note
+    db.session.commit()
+
+    current_app.logger.info(
+        'INSPECTION FOLLOW-UP FLAGGED | id=%s | by=%s | note=%r',
+        inspection_id, current_user.username, note,
+    )
+    log_action(ACTION_UPDATE, 'Inspection', inspection_id,
+               f'{inspection.template.name} @ {inspection.facility.name}',
+               f'follow_up_required=True; note={note!r}')
+    flash('Follow-up inspection required flag set.', 'warning')
+    return redirect(url_for('inspections.view', inspection_id=inspection_id))
+
+
+@bp.route('/<int:inspection_id>/clear-followup', methods=['POST'])
+@login_required
+@supervisor_required
+def clear_followup(inspection_id):
+    """Clear the follow-up required flag once actioned."""
+    inspection = Inspection.query.get_or_404(inspection_id)
+    inspection.follow_up_required = False
+    inspection.follow_up_note     = None
+    db.session.commit()
+    log_action(ACTION_UPDATE, 'Inspection', inspection_id,
+               f'{inspection.template.name} @ {inspection.facility.name}',
+               'follow_up_required=False (cleared)')
+    flash('Follow-up flag cleared.', 'success')
+    return redirect(url_for('inspections.view', inspection_id=inspection_id))
+
+
+# ── Start a re-inspection (linked to parent) ──────────────────────────────────
+
+@bp.route('/<int:inspection_id>/reinspect')
+@login_required
+def reinspect(inspection_id):
+    """Pre-fill the Start Inspection form with the same template/facility,
+    linking the new inspection to the parent via parent_inspection_id."""
+    from flask import session
+    parent = Inspection.query.get_or_404(inspection_id)
+
+    if current_user.role == 'customer':
+        flash('Access denied.', 'danger')
+        return redirect(url_for('inspections.index'))
+
+    # Store parent context in session so start() can pick it up
+    session['reinspect_parent_id']  = parent.id
+    session['reinspect_template_id'] = parent.template_id
+    session['reinspect_facility_id'] = parent.facility_id
+    flash(
+        f'Starting re-inspection of #{parent.id} — '
+        f'{parent.template.name} @ {parent.facility.name}.',
+        'info',
+    )
+    return redirect(url_for('inspections.start'))
 
 
 # ── Delete ────────────────────────────────────────────────────────────────────

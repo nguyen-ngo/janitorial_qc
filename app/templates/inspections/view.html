@@ -137,7 +137,30 @@
       <button onclick="window.print()" class="btn btn-sm btn-outline-secondary">
         <i class="bi bi-printer"></i> Print
       </button>
+      {% if current_user.role not in ['customer'] %}
+      <a href="{{ url_for('inspections.reinspect', inspection_id=inspection.id) }}"
+         class="btn btn-sm btn-outline-primary"
+         title="Start a follow-up re-inspection with the same template and facility">
+        <i class="bi bi-arrow-repeat"></i> Re-inspect
+      </a>
+      {% endif %}
       {% if current_user.role in ['admin','supervisor'] %}
+      {% if not inspection.follow_up_required %}
+      <button type="button" class="btn btn-sm btn-outline-warning"
+              data-bs-toggle="modal" data-bs-target="#followupModal"
+              title="Flag this inspection as requiring a follow-up">
+        <i class="bi bi-flag"></i> Flag Follow-up
+      </button>
+      {% else %}
+      <form method="post"
+            action="{{ url_for('inspections.clear_followup', inspection_id=inspection.id) }}"
+            class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-sm btn-warning">
+          <i class="bi bi-flag-fill"></i> Clear Follow-up
+        </button>
+      </form>
+      {% endif %}
       <form method="post" action="{{ url_for('inspections.delete', inspection_id=inspection.id) }}"
             onsubmit="return confirm('Delete this inspection permanently?')">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -146,6 +169,48 @@
       {% endif %}
     </div>
   </div>
+
+  {# ── Follow-up required alert ── #}
+  {% if inspection.follow_up_required %}
+  <div class="alert alert-warning d-flex align-items-start gap-2 mb-3">
+    <i class="bi bi-flag-fill mt-1"></i>
+    <div>
+      <strong>Follow-up Inspection Required</strong>
+      {% if inspection.follow_up_note %}<br><span class="small">{{ inspection.follow_up_note }}</span>{% endif %}
+      <div class="mt-2">
+        <a href="{{ url_for('inspections.reinspect', inspection_id=inspection.id) }}"
+           class="btn btn-sm btn-warning">
+          <i class="bi bi-arrow-repeat me-1"></i>Start Re-inspection
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Parent/child inspection links ── #}
+  {% if inspection.parent %}
+  <div class="alert alert-info small mb-3">
+    <i class="bi bi-arrow-up-circle me-1"></i>
+    This is a re-inspection of
+    <a href="{{ url_for('inspections.view', inspection_id=inspection.parent.id) }}"
+       class="alert-link">Inspection #{{ inspection.parent.id }}</a>
+    ({{ inspection.parent.inspection_date.strftime('%Y-%m-%d') }},
+    score: {{ inspection.parent.overall_score|round(1) if inspection.parent.overall_score else 'N/A' }}%).
+  </div>
+  {% endif %}
+  {% set followups = inspection.follow_ups.all() %}
+  {% if followups %}
+  <div class="alert alert-secondary small mb-3">
+    <i class="bi bi-arrow-down-circle me-1"></i>
+    Follow-up inspection(s):
+    {% for fu in followups %}
+    <a href="{{ url_for('inspections.view', inspection_id=fu.id) }}" class="alert-link">
+      #{{ fu.id }} ({{ fu.inspection_date.strftime('%Y-%m-%d') }},
+      score: {{ fu.overall_score|round(1) if fu.overall_score else 'N/A' }}%)
+    </a>{% if not loop.last %}, {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
 
   {# Header #}
   <div class="insp-header">
@@ -452,4 +517,30 @@ function closeMedia() {
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMedia(); });
 </script>
+
+{# ── Flag follow-up modal ── #}
+<div class="modal fade" id="followupModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST" action="{{ url_for('inspections.flag_followup', inspection_id=inspection.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-flag me-2"></i>Flag Follow-up Required</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label fw-semibold">Reason / Notes <span class="text-muted small">(optional)</span></label>
+          <textarea name="follow_up_note" class="form-control" rows="3"
+                    placeholder="Describe what needs to be addressed in the follow-up inspection…"></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-warning">
+            <i class="bi bi-flag me-1"></i>Flag Follow-up
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
 {% endblock %}

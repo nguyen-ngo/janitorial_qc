@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col-md-8 offset-md-2">
+    <div class="card shadow-sm">
+      <div class="card-header bg-primary text-white">
+        <h4 class="mb-0"><i class="bi bi-calendar-check me-2"></i>{{ title }}</h4>
+      </div>
+      <div class="card-body">
+        <form method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Report Name</label>
+            <input type="text" name="name" class="form-control"
+                   value="{{ report.name if report else '' }}" required
+                   placeholder="e.g. Weekly Facility Summary">
+          </div>
+
+          <div class="row">
+            <div class="col-md-4 mb-3">
+              <label class="form-label fw-semibold">Report Type</label>
+              <select name="report_type" class="form-select">
+                {% for val, label in [('summary','Summary KPIs'),('facility','Facility Detail'),('issues','Open Issues')] %}
+                <option value="{{ val }}" {{ 'selected' if report and report.report_type == val else '' }}>
+                  {{ label }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="form-label fw-semibold">Frequency</label>
+              <select name="frequency" class="form-select">
+                {% for val in ['daily','weekly','monthly'] %}
+                <option value="{{ val }}" {{ 'selected' if report and report.frequency == val else '' }}>
+                  {{ val|title }}
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-4 mb-3">
+              <label class="form-label fw-semibold">Facility <span class="text-muted small">(optional)</span></label>
+              <select name="facility_id" class="form-select">
+                <option value="">— All Facilities —</option>
+                {% for f in facilities %}
+                <option value="{{ f.id }}"
+                  {{ 'selected' if report and report.facility_id == f.id else '' }}>
+                  {{ f.name }}
+                </option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Leave blank to include all facilities.</div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Recipients</label>
+            <input type="text" name="recipients" class="form-control"
+                   value="{{ report.recipient_list()|join(', ') if report else '' }}"
+                   placeholder="email1@example.com, email2@example.com"
+                   required>
+            <div class="form-text">Comma-separated list of email addresses.</div>
+          </div>
+
+          <div class="row mb-3">
+            <div class="col-auto">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="include_csv"
+                       id="include_csv" value="1"
+                       {{ 'checked' if report and report.include_csv else '' }}>
+                <label class="form-check-label" for="include_csv">Attach CSV export</label>
+              </div>
+            </div>
+          </div>
+
+          {% if report %}
+          <div class="mb-3">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="active"
+                     id="active" value="1"
+                     {{ 'checked' if report.active else '' }}>
+              <label class="form-check-label" for="active">Active (send on schedule)</label>
+            </div>
+          </div>
+          {% endif %}
+
+          <div class="d-flex gap-2 mt-3">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-save me-1"></i>
+              {{ 'Save Changes' if report else 'Create Schedule' }}
+            </button>
+            <a href="{{ url_for('scheduled_reports.index') }}" class="btn btn-secondary">
+              <i class="bi bi-x-circle me-1"></i> Cancel
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

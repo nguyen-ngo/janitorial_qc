@@ -8,7 +8,9 @@
                   bg-{{ 'danger' if issue.severity in ['critical','high'] else 'warning' if issue.severity == 'medium' else 'secondary' }}
                   text-{{ 'white' if issue.severity in ['critical','high','low'] else 'dark' }}">
         <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Issue #{{ issue.id }} — {{ issue.severity|title }} Severity</h5>
-        <span class="badge bg-light text-dark">{{ issue.status|replace('_',' ')|title }}</span>
+        <span class="badge bg-{{ 'info text-dark' if issue.status == 'pending_verification' else 'light text-dark' }}">
+          {{ issue.status|replace('_',' ')|title }}
+        </span>
       </div>
       <div class="card-body">
         <dl class="row mb-0">
@@ -66,6 +68,35 @@
           {% endfor %}
         </div>
         {% endif %}
+        {% endif %}
+
+        {# ── Verification panel ── #}
+        {% if issue.verified_at %}
+        <hr>
+        <div class="alert alert-success py-2 mb-0">
+          <i class="bi bi-patch-check-fill me-1"></i>
+          <strong>Verified</strong> by {{ issue.verifier.username if issue.verifier else 'unknown' }}
+          on {{ issue.verified_at.strftime('%Y-%m-%d %H:%M') }}.
+          {% if issue.verification_note %}<br><span class="small">{{ issue.verification_note }}</span>{% endif %}
+        </div>
+        {% elif issue.status == 'pending_verification' %}
+        <hr>
+        <div class="alert alert-info py-2 mb-0">
+          <i class="bi bi-hourglass-split me-1"></i>
+          <strong>Awaiting supervisor verification.</strong>
+          {% if current_user.role in ['admin','supervisor'] %}
+          <form method="POST" action="{{ url_for('issues.verify', issue_id=issue.id) }}" class="mt-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-2">
+              <input type="text" name="verification_note" class="form-control form-control-sm"
+                     placeholder="Verification note (optional)">
+            </div>
+            <button type="submit" class="btn btn-sm btn-success">
+              <i class="bi bi-patch-check me-1"></i>Verify &amp; Close
+            </button>
+          </form>
+          {% endif %}
+        </div>
         {% endif %}
       </div>
     </div>
@@ -172,6 +203,17 @@
           </div>
           <button type="submit" class="btn btn-primary w-100">Save Update</button>
         </form>
+        {% if issue.status in ['in_progress', 'resolved'] and current_user.role not in ['customer'] %}
+        <form method="POST"
+              action="{{ url_for('issues.request_verification', issue_id=issue.id) }}"
+              class="mt-2">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-outline-info w-100"
+                  onclick="return confirm('Mark this issue as pending supervisor verification?')">
+            <i class="bi bi-hourglass-split me-1"></i> Request Verification
+          </button>
+        </form>
+        {% endif %}
       </div>
     </div>
     {% endif %}

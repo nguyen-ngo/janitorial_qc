@@ -94,6 +94,19 @@ def index():
             recent_q = recent_q.filter(False)
     recent_inspections = recent_q.limit(5).all()
 
+    # ── Pending follow-up inspections ────────────────────────────────────
+    followup_q = Inspection.query.filter_by(
+        follow_up_required=True, status='completed'
+    ).filter(Inspection.follow_ups == None)  # noqa: E711 — SQLAlchemy usage
+    if is_inspector:
+        followup_q = followup_q.filter(Inspection.inspector_id == current_user.id)
+    elif is_customer:
+        if customer_facility_ids:
+            followup_q = followup_q.filter(Inspection.facility_id.in_(customer_facility_ids))
+        else:
+            followup_q = followup_q.filter(False)
+    pending_followups = followup_q.count()
+
     # ── System stats (admin/supervisor) ───────────────────────────────────
     total_facilities = Facility.query.filter_by(active=True).count() if is_privileged else 0
     total_templates  = InspectionTemplate.query.count()               if is_privileged else 0
@@ -183,4 +196,5 @@ def index():
         trend_data         = trend_data,
         facility_perf      = facility_perf,
         customer_facilities = customer_facilities,
+        pending_followups   = pending_followups,
     )

@@ -117,6 +117,14 @@ def view(issue_id):
     form.assigned_to.choices = [(0, '— Unassigned —')] + [(u.id, u.username) for u in staff]
     form.status.data = form.status.data or issue.status
 
+    # Extend status choices to include pending_verification
+    form.status.choices = [
+        ('open', 'Open'),
+        ('in_progress', 'In Progress'),
+        ('pending_verification', 'Pending Verification'),
+        ('resolved', 'Resolved'),
+    ]
+
     if form.validate_on_submit():
         old_status      = issue.status
         old_assigned_to = issue.assigned_to
@@ -415,5 +423,97 @@ def create():
             db.session.commit()
         flash('Issue created.', 'success')
         return redirect(url_for('issues.index'))
+
+
+# ── Supervisor verify resolved issue ─────────────────────────────────────────
+
+@bp.route('/<int:issue_id>/verify', methods=['POST'])
+@login_required
+@supervisor_required
+def verify(issue_id):
+    """Supervisor sign-off: confirms resolution is satisfactory and closes the issue."""
+    issue = Issue.query.get_or_404(issue_id)
+
+    if issue.status not in ('resolved', 'pending_verification'):
+        flash('Only resolved or pending-verification issues can be verified.', 'warning')
+        return redirect(url_for('issues.view', issue_id=issue_id))
+
+    note = request.form.get('verification_note', '').strip() or None
+
+    issue.status           = 'resolved'
+    issue.verified_by      = current_user.id
+    issue.verified_at      = now_eastern()
+    issue.verification_note = note
+    if not issue.resolved_at:
+        issue.resolved_at  = now_eastern()
+
+    db.session.commit()
+    current_app.logger.info(
+        'ISSUE VERIFIED | id=%s | by=%s | note=%r',
+        issue_id, current_user.username, note,
+    )
+    log_action(ACTION_UPDATE, 'Issue', issue_id,
+               f'#{issue_id} in {issue.area.name}',
+               f'verified_by={current_user.username}')
+    flash(f'Issue #{issue_id} verified and closed.', 'success')
+    return redirect(url_for('issues.view', issue_id=issue_id))
+
+
+@bp.route('/<int:issue_id>/request-verification', methods=['POST'])
+@login_required
+def request_verification(issue_id):
+    """Inspector/assignee marks the issue as pending supervisor verification."""
+    issue = Issue.query.get_or_404(issue_id)
+
+    if current_user.role == 'customer':
+        flash('Access denied.', 'danger')
+        return redirect(url_for('issues.index'))
+
+    # Only the assignee, supervisor, or admin can request verification
+    can_act = (
+        current_user.role in ['admin', 'supervisor']
+        or issue.assigned_to == current_user.id
+    )
+    if not can_act:
+        flash('Access denied.', 'danger')
+        return redirect(url_for('issues.view', issue_id=issue_id))
+
+    if issue.status not in ('in_progress', 'resolved'):
+        flash('Issue must be in progress or resolved to request verification.', 'warning')
+        return redirect(url_for('issues.view', issue_id=issue_id))
+
+    issue.status = 'pending_verification'
+    db.session.commit()
+
+    current_app.logger.info(
+        'ISSUE VERIFICATION REQUESTED | id=%s | by=%s',
+        issue_id, current_user.username,
+    )
+    log_action(ACTION_UPDATE, 'Issue', issue_id,
+               f'#{issue_id} in {issue.area.name}',
+               f'status=pending_verification; requested_by={current_user.username}')
+
+    # Notify supervisors
+    from app.utils.notifications import notify
+    from app.models.notification import EVENT_ISSUE_STATUS
+    supervisors = User.query.filter(User.role.in_(['admin', 'supervisor'])).all()
+    for sup in supervisors:
+        if sup.id != current_user.id:
+            notify(
+                recipient  = sup,
+                title      = f'Issue #{issue_id} Awaiting Verification',
+                body       = (
+                    f'{current_user.username} has marked Issue #{issue_id} '
+                    f'({issue.severity.title()} severity) in {issue.area.name} '
+                    f'as pending your verification.'
+                ),
+                link       = url_for('issues.view', issue_id=issue_id),
+                issue_id   = issue_id,
+                event_type = EVENT_ISSUE_STATUS,
+                send_email = True,
+            )
+    db.session.commit()
+    flash('Issue marked as pending verification. Supervisors have been notified.', 'info')
+    return redirect(url_for('issues.view', issue_id=issue_id))
 
     return render_template('issues/form.html', form=form, title='Log New Issue')

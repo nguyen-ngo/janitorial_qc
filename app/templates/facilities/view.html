@@ -8,6 +8,12 @@
         <h2><i class="bi bi-building"></i> {{ facility.name }}</h2>
     </div>
     <div class="col-md-4 text-end d-flex gap-2 justify-content-end align-items-start">
+        {% if current_user.role in ['admin', 'supervisor', 'project_manager', 'customer'] %}
+        <a href="{{ url_for('reports.facility_report', facility_id=facility.id) }}"
+           class="btn btn-outline-info">
+          <i class="bi bi-graph-up-arrow"></i> Scorecard
+        </a>
+        {% endif %}
         {% if current_user.role in ['admin', 'supervisor'] %}
         <a href="{{ url_for('facilities.edit_facility', facility_id=facility.id) }}" class="btn btn-outline-primary">
             <i class="bi bi-pencil"></i> Edit
@@ -66,15 +72,29 @@
                 <h5 class="mb-0">Statistics</h5>
             </div>
             <div class="card-body">
-                <div class="row text-center">
-                    <div class="col-6">
+                <div class="row text-center g-2">
+                    <div class="col-4">
                         <h3 class="text-primary">{{ areas|length }}</h3>
                         <small class="text-muted">Areas</small>
                     </div>
-                    <div class="col-6">
+                    <div class="col-4">
                         <h3 class="text-info">{{ facility.inspections.count() }}</h3>
                         <small class="text-muted">Inspections</small>
                     </div>
+                    <div class="col-4">
+                        {%- set ns = namespace(open=0) -%}
+                        {%- for area in areas -%}
+                          {%- set ns.open = ns.open + area.issues.filter_by(status='open').count() + area.issues.filter_by(status='in_progress').count() -%}
+                        {%- endfor -%}
+                        <h3 class="text-{{ 'danger' if ns.open > 0 else 'success' }}">{{ ns.open }}</h3>
+                        <small class="text-muted">Open Issues</small>
+                    </div>
+                </div>
+                <div class="text-center mt-3">
+                  <a href="{{ url_for('reports.facility_report', facility_id=facility.id) }}"
+                     class="btn btn-sm btn-outline-info">
+                    <i class="bi bi-graph-up-arrow me-1"></i>View Full Scorecard
+                  </a>
                 </div>
             </div>
         </div>

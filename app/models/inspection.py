@@ -64,8 +64,17 @@ class Inspection(db.Model):
     form_data       = db.Column(db.JSON)          # filled form field responses {field_id: value}
     completed_at    = db.Column(db.DateTime)
 
-    results = db.relationship('InspectionResult', backref='inspection', lazy='dynamic', cascade='all, delete-orphan')
-    issues  = db.relationship('Issue', backref='inspection', lazy='dynamic', cascade='all, delete-orphan')
+    # ── Re-inspection / follow-up workflow ────────────────────────────────
+    parent_inspection_id = db.Column(
+        db.Integer, db.ForeignKey('inspections.id', ondelete='SET NULL'), nullable=True
+    )
+    follow_up_required = db.Column(db.Boolean, nullable=False, default=False)
+    follow_up_note     = db.Column(db.Text, nullable=True)
+
+    results     = db.relationship('InspectionResult', backref='inspection', lazy='dynamic', cascade='all, delete-orphan')
+    issues      = db.relationship('Issue', backref='inspection', lazy='dynamic', cascade='all, delete-orphan')
+    follow_ups  = db.relationship('Inspection', backref=db.backref('parent', remote_side='Inspection.id'),
+                                  lazy='dynamic', foreign_keys='Inspection.parent_inspection_id')
 
     def __repr__(self):
         return f'<Inspection {self.id} - {self.inspection_date}>'

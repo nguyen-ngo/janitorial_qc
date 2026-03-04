@@ -14,6 +14,7 @@
 {# ── Top stat cards ─────────────────────────────────────────────────────── #}
 <div class="row g-3 mb-4">
   <div class="col-6 col-md-3">
+    <a href="{{ url_for('inspections.index') }}" class="text-decoration-none">
     <div class="card text-white bg-primary h-100">
       <div class="card-body d-flex justify-content-between align-items-center">
         <div>
@@ -23,8 +24,10 @@
         <i class="bi bi-clipboard-data" style="font-size:2.5rem;opacity:.25;"></i>
       </div>
     </div>
+    </a>
   </div>
   <div class="col-6 col-md-3">
+    <a href="{{ url_for('inspections.index', status='completed') }}" class="text-decoration-none">
     <div class="card text-white bg-success h-100">
       <div class="card-body d-flex justify-content-between align-items-center">
         <div>
@@ -34,8 +37,10 @@
         <i class="bi bi-check-circle" style="font-size:2.5rem;opacity:.25;"></i>
       </div>
     </div>
+    </a>
   </div>
   <div class="col-6 col-md-3">
+    <a href="{{ url_for('issues.index', status='open') }}" class="text-decoration-none">
     <div class="card text-white bg-warning h-100">
       <div class="card-body d-flex justify-content-between align-items-center">
         <div>
@@ -45,8 +50,10 @@
         <i class="bi bi-exclamation-triangle" style="font-size:2.5rem;opacity:.25;"></i>
       </div>
     </div>
+    </a>
   </div>
   <div class="col-6 col-md-3">
+    <a href="{{ url_for('reports.index') }}" class="text-decoration-none">
     <div class="card text-white bg-info h-100">
       <div class="card-body d-flex justify-content-between align-items-center">
         <div>
@@ -56,8 +63,24 @@
         <i class="bi bi-graph-up" style="font-size:2.5rem;opacity:.25;"></i>
       </div>
     </div>
+    </a>
   </div>
 </div>
+
+{# ── Pending Follow-ups alert (non-customer) ────────────────────────────── #}
+{% if pending_followups and pending_followups > 0 and current_user.role != 'customer' %}
+<div class="row mb-3">
+  <div class="col-12">
+    <a href="{{ url_for('inspections.index', follow_up='1') }}" class="text-decoration-none">
+      <div class="alert alert-warning d-flex align-items-center mb-0 py-2" role="alert">
+        <i class="bi bi-arrow-repeat fs-5 me-2"></i>
+        <strong>{{ pending_followups }}</strong>&nbsp;inspection{{ 's' if pending_followups != 1 else '' }} flagged as requiring a follow-up re-inspection.
+        <span class="ms-2 text-muted small">Click to view →</span>
+      </div>
+    </a>
+  </div>
+</div>
+{% endif %}
 
 {# ── SLA Summary ─────────────────────────────────────────────────────────── #}
 {% if sla_breached > 0 or sla_at_risk > 0 %}

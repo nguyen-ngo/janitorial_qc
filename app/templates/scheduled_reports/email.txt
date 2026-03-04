@@ -1,0 +1,44 @@
+{{ report.frequency|title }} Report — {{ report.name }}
+{{ start.strftime('%b %d, %Y') }} — {{ end.strftime('%b %d, %Y') }}{% if facility %} · {{ facility.name }}{% endif %}
+
+{% if report.report_type in ('summary','facility') %}
+SUMMARY
+-------
+Inspections:  {{ total_inspections }}
+Completed:    {{ completed }}
+Open Issues:  {{ open_issues }}
+Avg Score:    {{ '%.1f'|format(avg_score) ~ '%' if avg_score else '—' }}
+
+{% if facility_scores %}
+FACILITY SCORES
+---------------
+{% for row in facility_scores %}
+  {{ row.name }}: {{ '%.1f'|format(row.avg) }}% ({{ row.count }} inspection{{ 's' if row.count != 1 else '' }})
+{% endfor %}
+{% endif %}
+
+{% if critical_issues %}
+OPEN CRITICAL / HIGH ISSUES
+----------------------------
+{% for i in critical_issues %}
+  #{{ i.id }} [{{ i.severity|title }}] {{ i.area.facility.name }} — {{ i.description[:80] }}
+  Link: {{ base_url }}/issues/{{ i.id }}
+{% endfor %}
+{% endif %}
+
+{% elif report.report_type == 'issues' %}
+OPEN ISSUES ({{ issues|length }})
+{% if issues %}
+{% for i in issues %}
+  #{{ i.id }} [{{ i.severity|title }}] {{ i.area.facility.name }} / {{ i.area.name }}
+  Status: {{ i.status|replace('_',' ')|title }} | {{ i.description[:80] }}
+  Link: {{ base_url }}/issues/{{ i.id }}
+{% endfor %}
+{% else %}
+  No open issues.
+{% endif %}
+{% endif %}
+
+--
+Janitorial QC System — automated scheduled report.
+View dashboard: {{ base_url }}/reports

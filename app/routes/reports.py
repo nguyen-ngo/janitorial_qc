@@ -220,6 +220,134 @@ def facility_report(facility_id):
         start=start, end=end)
 
 
+
+# ── Facility Scorecard ────────────────────────────────────────────────────────
+
+@bp.route('/facility/<int:facility_id>/scorecard')
+@login_required
+def facility_scorecard(facility_id):
+    """Comprehensive per-facility scorecard: score trend, SLA compliance,
+    issue breakdown by severity, inspection frequency."""
+    if current_user.role not in ['admin', 'supervisor', 'project_manager', 'customer']:
+        from flask import flash, redirect, url_for
+        flash('Access denied.', 'danger')
+        return redirect(url_for('dashboard.index'))
+
+    facility = Facility.query.get_or_404(facility_id)
+
+    if current_user.role == 'customer':
+        cids = get_customer_scope(current_user) or []
+        if facility_id not in cids:
+            from flask import flash, redirect, url_for
+            flash('Access denied.', 'danger')
+            return redirect(url_for('reports.index'))
+
+    from app.utils.sla import sla_status, SLA_HOURS
+    from datetime import timedelta
+
+    now   = now_eastern()
+    days  = request.args.get('days', 90, type=int)
+    if days not in (30, 60, 90, 180, 365):
+        days = 90
+    start = now - timedelta(days=days)
+
+    # ── Score trend (daily) ───────────────────────────────────────────────
+    trend_rows = db.session.query(
+        func.date(Inspection.inspection_date).label('day'),
+        func.avg(Inspection.overall_score).label('avg'),
+        func.count(Inspection.id).label('count'),
+    ).filter(
+        Inspection.facility_id    == facility_id,
+        Inspection.inspection_date >= start,
+        Inspection.status          == 'completed',
+        Inspection.overall_score.isnot(None),
+    ).group_by(func.date(Inspection.inspection_date))     .order_by(func.date(Inspection.inspection_date)).all()
+
+    trend_labels = [str(r.day) for r in trend_rows]
+    trend_data   = [round(float(r.avg), 2) for r in trend_rows]
+
+    # ── KPI summary ───────────────────────────────────────────────────────
+    all_insp = Inspection.query.filter(
+        Inspection.facility_id    == facility_id,
+        Inspection.inspection_date >= start,
+    ).all()
+    completed_insp = [i for i in all_insp if i.status == 'completed']
+    avg_score      = (
+        round(sum(float(i.overall_score) for i in completed_insp
+                  if i.overall_score is not None)
+              / len([i for i in completed_insp if i.overall_score is not None]), 2)
+        if any(i.overall_score for i in completed_insp) else None
+    )
+
+    # ── Area scores ───────────────────────────────────────────────────────
+    area_scores = db.session.query(
+        Area.name,
+        func.avg(Inspection.overall_score).label('avg'),
+        func.count(Inspection.id).label('count'),
+    ).join(Inspection, Area.id == Inspection.area_id)     .filter(
+        Inspection.facility_id    == facility_id,
+        Inspection.inspection_date >= start,
+        Inspection.status          == 'completed',
+        Inspection.overall_score.isnot(None),
+    ).group_by(Area.id, Area.name)     .order_by(func.avg(Inspection.overall_score).desc()).all()
+
+    # ── Open issues ───────────────────────────────────────────────────────
+    open_issues = Issue.query.join(Area)        .filter(Area.facility_id == facility_id, Issue.status != 'resolved')        .order_by(Issue.reported_at.desc()).all()
+
+    # SLA compliance for closed issues in window
+    closed_issues = Issue.query.join(Area).filter(
+        Area.facility_id == facility_id,
+        Issue.status     == 'resolved',
+        Issue.reported_at >= start,
+    ).all()
+    sla_met     = sum(1 for i in closed_issues
+                      if i.resolved_at and i.reported_at
+                      and (i.resolved_at - i.reported_at).total_seconds() / 3600
+                         <= SLA_HOURS.get(i.severity, 9999))
+    sla_total   = len(closed_issues)
+    sla_pct     = round(sla_met / sla_total * 100, 1) if sla_total else None
+
+    # Issue severity breakdown
+    sev_counts = {}
+    for sev in ('critical', 'high', 'medium', 'low'):
+        sev_counts[sev] = Issue.query.join(Area).filter(
+            Area.facility_id == facility_id,
+            Issue.severity   == sev,
+            Issue.status     != 'resolved',
+        ).count()
+
+    # Pending verification count
+    pending_verification = Issue.query.join(Area).filter(
+        Area.facility_id == facility_id,
+        Issue.status     == 'pending_verification',
+    ).count()
+
+    # Follow-up required inspections
+    followup_required = Inspection.query.filter(
+        Inspection.facility_id     == facility_id,
+        Inspection.follow_up_required == True,
+    ).order_by(Inspection.inspection_date.desc()).limit(10).all()
+
+    return render_template('reports/scorecard.html',
+        facility             = facility,
+        days                 = days,
+        start                = start,
+        now                  = now,
+        total_inspections    = len(all_insp),
+        completed_insp       = len(completed_insp),
+        avg_score            = avg_score,
+        trend_labels         = trend_labels,
+        trend_data           = trend_data,
+        area_scores          = area_scores,
+        open_issues          = open_issues,
+        sla_pct              = sla_pct,
+        sla_met              = sla_met,
+        sla_total            = sla_total,
+        sev_counts           = sev_counts,
+        pending_verification = pending_verification,
+        followup_required    = followup_required,
+    )
+
 # ── CSV export ────────────────────────────────────────────────────────────────
 
 @bp.route('/export/inspections')
