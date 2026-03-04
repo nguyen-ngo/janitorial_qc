@@ -1,9 +1,11 @@
 import logging
-from flask import Blueprint, render_template, request
+from datetime import datetime, timedelta
+from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
 from app.models.audit import AuditLog
 from app.models.user import User
 from app.utils.decorators import admin_required
+from app.utils.audit import log_action, ACTION_DELETE
 
 bp = Blueprint('audit', __name__, url_prefix='/audit')
 
@@ -86,6 +88,62 @@ def index():
 def view(log_id):
     entry = AuditLog.query.get_or_404(log_id)
     return render_template('audit/view.html', entry=entry)
+
+
+# ── Purge old logs ────────────────────────────────────────────────────────────
+
+PURGE_OPTIONS = {
+    7:   '7 days',
+    30:  '30 days',
+    60:  '60 days',
+    90:  '90 days',
+    180: '180 days',
+    365: '1 year',
+}
+
+@bp.route('/purge', methods=['POST'])
+@login_required
+@admin_required
+def purge():
+    """Delete audit log entries older than the selected threshold.
+
+    Accepts a POST form field `older_than` (integer days).
+    The purge itself is recorded as a new audit log entry so there is
+    always a traceable record of who purged what and when.
+    """
+    try:
+        older_than = int(request.form.get('older_than', 0))
+    except (ValueError, TypeError):
+        older_than = 0
+
+    if older_than not in PURGE_OPTIONS:
+        flash('Invalid purge threshold selected.', 'danger')
+        return redirect(url_for('audit.index'))
+
+    cutoff = datetime.utcnow() - timedelta(days=older_than)
+    deleted = AuditLog.query.filter(AuditLog.created_at < cutoff).delete()
+    db.session.flush()
+
+    label = PURGE_OPTIONS[older_than]
+    log_action(
+        ACTION_DELETE, 'AuditLog', None,
+        f'Purged {deleted} log entries older than {label}',
+        f'cutoff={cutoff.strftime("%Y-%m-%d %H:%M:%S")} UTC; deleted={deleted}',
+    )
+
+    db.session.commit()
+
+    logger.info(
+        'AUDIT PURGE | deleted=%s | older_than=%s days | by=%s',
+        deleted, older_than, request.remote_addr,
+    )
+
+    flash(
+        f'{deleted} audit log entr{"ies" if deleted != 1 else "y"} '
+        f'older than {label} have been permanently deleted.',
+        'success' if deleted else 'info',
+    )
+    return redirect(url_for('audit.index'))
 
 
 # Avoid circular import — imported after function definitions
