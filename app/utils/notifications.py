@@ -273,6 +273,105 @@ def _send_single_email(recipient, title, body, link):
 
 # ── Digest delivery ────────────────────────────────────────────────────────────
 
+
+# ── Customer portal notifications ─────────────────────────────────────────────
+
+def notify_customers_for_facility(
+    facility_id: int,
+    event_type: str,
+    title: str,
+    body: str,
+    link: str = None,
+    issue_id: int = None,
+    inspection_id: int = None,
+):
+    """Dispatch in-app + email notifications to all customer users assigned
+    to the given facility.
+
+    Resolves assignments via CustomerAssignment rows:
+      - facility-scoped assignment (facility_id matches exactly)
+      - project-scoped assignment (facility belongs to the project, no facility_id set)
+
+    Respects each customer's NotificationPreference for the supplied event_type.
+    Best-effort: a failure on one recipient does not block others.
+
+    Parameters
+    ----------
+    facility_id   : The facility where the event occurred.
+    event_type    : EVENT_CUSTOMER_INSPECTION_DONE or EVENT_CUSTOMER_ISSUE_UPDATED.
+    title         : Short notification headline.
+    body          : Full notification message.
+    link          : Relative URL for 'View Details'.
+    issue_id      : FK to issues.id (optional).
+    inspection_id : FK to inspections.id (optional).
+    """
+    try:
+        from app.models.project import CustomerAssignment
+        from app.models.facility import Facility
+        from app.models.user import User
+
+        facility = Facility.query.get(facility_id)
+        if not facility:
+            logger.warning(
+                'notify_customers_for_facility | facility_id=%s not found', facility_id
+            )
+            return
+
+        # Collect distinct customer user IDs that have access to this facility
+        notified_user_ids = set()
+
+        # 1. Direct facility-scoped assignments
+        direct = CustomerAssignment.query.filter_by(facility_id=facility_id).all()
+        for a in direct:
+            notified_user_ids.add(a.user_id)
+
+        # 2. Project-scoped assignments (no facility_id) — if facility belongs to a project
+        if facility.project_id:
+            project_wide = CustomerAssignment.query.filter_by(
+                project_id=facility.project_id,
+                facility_id=None,
+            ).all()
+            for a in project_wide:
+                notified_user_ids.add(a.user_id)
+
+        if not notified_user_ids:
+            logger.debug(
+                'notify_customers_for_facility | facility_id=%s | no customer assignments found',
+                facility_id,
+            )
+            return
+
+        for user_id in notified_user_ids:
+            user = User.query.get(user_id)
+            if not user or not user.active or user.role != 'customer':
+                continue
+            try:
+                notify(
+                    recipient     = user,
+                    title         = title,
+                    body          = body,
+                    link          = link,
+                    issue_id      = issue_id,
+                    inspection_id = inspection_id,
+                    event_type    = event_type,
+                    send_email    = True,
+                )
+                logger.info(
+                    'CUSTOMER NOTIFY | user=%s | facility_id=%s | event=%s',
+                    user.username, facility_id, event_type,
+                )
+            except Exception as exc:
+                logger.error(
+                    'CUSTOMER NOTIFY FAILED | user=%s | facility_id=%s | event=%s | error=%s',
+                    user_id, facility_id, event_type, exc,
+                )
+
+    except Exception as exc:
+        logger.error(
+            'notify_customers_for_facility | unexpected error | facility_id=%s | error=%s',
+            facility_id, exc,
+        )
+
 def send_pending_digests(frequency: str = 'daily'):
     """Send digest emails for all users who have pending digest notifications.
 

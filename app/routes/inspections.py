@@ -15,8 +15,11 @@ from app.models.user import User
 from app.utils.forms import StartInspectionForm, IssueForm
 from app.utils.decorators import supervisor_required
 from app.utils.pdf_export import generate_inspection_pdf
-from app.utils.notifications import notify
-from app.models.notification import EVENT_INSPECTION_DONE, EVENT_ISSUE_ASSIGNED
+from app.utils.notifications import notify, notify_customers_for_facility
+from app.models.notification import (
+    EVENT_INSPECTION_DONE, EVENT_ISSUE_ASSIGNED,
+    EVENT_CUSTOMER_INSPECTION_DONE, EVENT_CUSTOMER_ISSUE_UPDATED,
+)
 from app.utils.audit import log_action, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE, ACTION_EXPORT
 from app.utils.scope import get_customer_scope
 
@@ -347,6 +350,19 @@ def execute(inspection_id):
                         event_type    = EVENT_INSPECTION_DONE,
                         send_email    = True,
                     )
+            # ── Notify customer portal users for this facility ──────────
+            notify_customers_for_facility(
+                facility_id   = inspection.facility_id,
+                event_type    = EVENT_CUSTOMER_INSPECTION_DONE,
+                title         = f'Inspection Completed at {inspection.facility.name}',
+                body          = (
+                    f'An inspection using the "{inspection.template.name}" template '
+                    f'was completed at {inspection.facility.name}. '
+                    f'Overall score: {score_display}.'
+                ),
+                link          = url_for('inspections.view', inspection_id=inspection.id),
+                inspection_id = inspection.id,
+            )
             db.session.commit()  # Commit notifications
             log_action(ACTION_UPDATE, 'Inspection', inspection.id,
                        f'{inspection.template.name} @ {inspection.facility.name}',
@@ -529,6 +545,23 @@ def flag_issue(inspection_id):
                     send_email    = True,
                 )
                 db.session.commit()  # Commit notification
+
+        # ── Notify customer portal users for this facility ──────────
+        notify_customers_for_facility(
+            facility_id = inspection.facility_id,
+            event_type  = EVENT_CUSTOMER_ISSUE_UPDATED,
+            title       = f'New Issue #{issue.id} at {inspection.facility.name}',
+            body        = (
+                f'A new {issue.severity.title()}-severity issue has been logged '
+                f'in {issue.area.name} at {inspection.facility.name} '
+                f'during inspection #{inspection_id}. '
+                f'Description: {issue.description[:120]}'
+                f'{"…" if len(issue.description) > 120 else ""}'
+            ),
+            link     = url_for('issues.view', issue_id=issue.id),
+            issue_id = issue.id,
+        )
+        db.session.commit()
 
         flash('Issue logged successfully.', 'success')
         return redirect(url_for('inspections.execute', inspection_id=inspection_id))

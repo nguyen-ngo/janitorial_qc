@@ -13,6 +13,13 @@ EVENT_ISSUE_FOLLOW      = 'issue_follow_update'
 EVENT_INSPECTION_DONE   = 'inspection_completed'
 EVENT_SLA_ALERT         = 'sla_alert'
 
+# ── Customer portal events ─────────────────────────────────────────────────
+# Fired when an inspection completes or an issue is created/updated at a
+# facility the customer is assigned to.  Separate constants allow customers
+# to manage these preferences independently from internal staff events.
+EVENT_CUSTOMER_INSPECTION_DONE = 'customer_inspection_completed'
+EVENT_CUSTOMER_ISSUE_UPDATED   = 'customer_issue_updated'
+
 ALL_EVENT_TYPES = {
     EVENT_ISSUE_ASSIGNED:  'Issue assigned to me',
     EVENT_ISSUE_STATUS:    'Issue status changed',
@@ -20,6 +27,9 @@ ALL_EVENT_TYPES = {
     EVENT_ISSUE_FOLLOW:    'Updates on followed issues',
     EVENT_INSPECTION_DONE: 'Inspection completed',
     EVENT_SLA_ALERT:       'SLA at-risk / breached alerts',
+    # Customer-facing — only relevant for customer role accounts
+    EVENT_CUSTOMER_INSPECTION_DONE: 'Inspection completed at my facility (portal)',
+    EVENT_CUSTOMER_ISSUE_UPDATED:   'Issue created or updated at my facility (portal)',
 }
 
 

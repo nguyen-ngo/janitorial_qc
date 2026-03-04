@@ -9,10 +9,11 @@ from app.models.user import User
 from app.models.notification import (
     EVENT_ISSUE_ASSIGNED, EVENT_ISSUE_STATUS,
     EVENT_ISSUE_COMMENT, EVENT_ISSUE_FOLLOW,
+    EVENT_CUSTOMER_ISSUE_UPDATED,
 )
 from app.utils.forms import IssueForm, IssueUpdateForm
 from app.utils.decorators import supervisor_required
-from app.utils.notifications import notify
+from app.utils.notifications import notify, notify_customers_for_facility
 from app.utils.audit import log_action, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE
 from app.utils.scope import get_customer_scope
 from app.utils.sla import sla_status
@@ -265,6 +266,22 @@ def view(issue_id):
                 exclude_user_ids = exclude_ids,
             )
 
+        # ── Notify customer portal users for this facility ──────────
+        facility_id = issue.area.facility_id if issue.area else None
+        if facility_id:
+            changes_summary = '; '.join(changes) if changes else 'updated'
+            notify_customers_for_facility(
+                facility_id = facility_id,
+                event_type  = EVENT_CUSTOMER_ISSUE_UPDATED,
+                title       = f'Issue #{issue.id} Updated at {issue.area.facility.name}',
+                body        = (
+                    f'Issue #{issue.id} ({issue.severity.title()} severity) '
+                    f'in {issue.area.name} was updated: {changes_summary}. '
+                    f'Current status: {issue.status.replace("_", " ").title()}.'
+                ),
+                link     = url_for('issues.view', issue_id=issue.id),
+                issue_id = issue.id,
+            )
         db.session.commit()  # Commit all notifications
         log_action(ACTION_UPDATE, 'Issue', issue.id,
                    f'#{issue.id} in {issue.area.name}',
@@ -379,6 +396,23 @@ def create():
                 )
                 db.session.commit()
 
+        # ── Notify customer portal users for this facility ──────────
+        area = Area.query.get(issue.area_id)
+        if area:
+            notify_customers_for_facility(
+                facility_id = area.facility_id,
+                event_type  = EVENT_CUSTOMER_ISSUE_UPDATED,
+                title       = f'New Issue #{issue.id} at {area.facility.name}',
+                body        = (
+                    f'A new {issue.severity.title()}-severity issue has been logged '
+                    f'in {area.name} at {area.facility.name}. '
+                    f'Description: {issue.description[:120]}'
+                    f'{"…" if len(issue.description) > 120 else ""}'
+                ),
+                link     = url_for('issues.view', issue_id=issue.id),
+                issue_id = issue.id,
+            )
+            db.session.commit()
         flash('Issue created.', 'success')
         return redirect(url_for('issues.index'))
 
