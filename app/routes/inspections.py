@@ -80,11 +80,8 @@ def _collect_form_responses(form_fields, existing_responses=None):
             photo_file = request.files.get(key)
             path = _save_photo(photo_file, subfolder='inspection_photos')
             if path:
-                # New file uploaded — use the new path
                 responses[fid] = path
             else:
-                # No new file — preserve the previously saved photo path.
-                # JSON keys are always strings; try both str and original type.
                 existing_path = (
                     existing_responses.get(str(fid))
                     or existing_responses.get(fid)
@@ -108,7 +105,6 @@ def _collect_form_responses(form_fields, existing_responses=None):
             responses[fid] = request.form.get(key, '0')
 
         else:
-            # text, textarea, number, date, email, radio, select, signature
             responses[fid] = request.form.get(key, '')
 
     return responses
@@ -132,11 +128,11 @@ def _compute_score_from_form(form_fields, responses):
             try:
                 v = int(val)
                 if v == 0:
-                    continue   # 0 = not answered, skip entirely
+                    continue
                 earned += v
                 total  += 5
             except (ValueError, TypeError):
-                pass  # unparseable = not answered, skip
+                pass
 
         elif field['type'] == 'checkbox':
             total  += 1
@@ -144,7 +140,6 @@ def _compute_score_from_form(form_fields, responses):
                 earned += 1
 
         elif field['type'] == 'radio':
-            # Options that look like pass/yes/ok score 1; fail/no/na score 0
             total += 1
             if val.lower() in ('pass', 'yes', 'ok', 'good', 'acceptable', 'compliant'):
                 earned += 1
@@ -209,7 +204,7 @@ def index():
         cids = get_customer_scope(current_user) or []
         facilities = Facility.query.filter(Facility.id.in_(cids), Facility.active == True).order_by(Facility.name).all()
     else:
-        facilities  = Facility.query.filter_by(active=True).order_by(Facility.name).all()
+        facilities = Facility.query.filter_by(active=True).order_by(Facility.name).all()
 
     return render_template('inspections/list.html',
                            inspections=inspections,
@@ -232,7 +227,6 @@ def start():
     form.template_id.choices = [(t.id, t.name) for t in templates]
     form.facility_id.choices = [(f.id, f.name) for f in facilities]
 
-    # Pre-select template/facility when arriving from reinspect()
     from flask import session as _session
     if not form.is_submitted():
         if _session.get('reinspect_template_id'):
@@ -247,7 +241,6 @@ def start():
     if form.validate_on_submit():
         template = InspectionTemplate.query.get_or_404(form.template_id.data)
 
-        # Guard: template must have a form built in the form editor
         if not template.get_form_schema():
             flash('This template has no form fields yet. Please build the form in the template editor first.', 'warning')
             return redirect(url_for('inspections.start'))
@@ -285,7 +278,7 @@ def areas_for_facility(facility_id):
     return jsonify([{'id': a.id, 'name': a.name} for a in areas])
 
 
-# ── Execute — render and submit the template form ─────────────────────────────
+# ── Execute ───────────────────────────────────────────────────────────────────
 
 @bp.route('/<int:inspection_id>/execute', methods=['GET', 'POST'])
 @login_required
@@ -301,11 +294,8 @@ def execute(inspection_id):
 
     template    = inspection.template
     form_fields = template.get_form_schema()
-
-    # Sort fields by grid position (row then col) for logical reading order
     form_fields = sorted(form_fields, key=lambda f: (f.get('row', 0), f.get('col', 0)))
 
-    # Load any previously saved draft responses
     saved_responses = {}
     if inspection.notes:
         try:
@@ -317,17 +307,11 @@ def execute(inspection_id):
 
     if request.method == 'POST':
         action = request.form.get('action', 'submit')
-
-        # Collect all field responses from the submitted form.
-        # Pass saved_responses so existing photo paths are preserved
-        # when no new file is selected on this submission.
         responses = _collect_form_responses(form_fields, saved_responses)
 
         if action == 'submit':
-            # Validate required fields
             missing = _validate_required(form_fields, responses)
             if missing:
-                # Save draft so the inspector doesn't lose their work
                 _save_draft(inspection, responses)
                 flash(
                     f'Please complete all required fields before submitting: '
@@ -336,20 +320,15 @@ def execute(inspection_id):
                 )
                 return redirect(url_for('inspections.execute', inspection_id=inspection_id))
 
-            # Compute score and mark complete
             score = _compute_score_from_form(form_fields, responses)
             inspection.overall_score = score
             inspection.status        = 'completed'
             inspection.completed_at  = now_eastern()
 
-            # Persist the final form data alongside any inspector notes
             _save_responses(inspection, responses)
             db.session.commit()
 
-            # ── Notify supervisors/admins that an inspection was completed ──
-            supervisors = User.query.filter(
-                User.role.in_(['admin', 'supervisor'])
-            ).all()
+            supervisors = User.query.filter(User.role.in_(['admin', 'supervisor'])).all()
             inspection_link = url_for('inspections.view', inspection_id=inspection.id)
             score_display = f'{score:.1f}%' if score is not None else 'N/A'
             for supervisor in supervisors:
@@ -368,7 +347,6 @@ def execute(inspection_id):
                         event_type    = EVENT_INSPECTION_DONE,
                         send_email    = True,
                     )
-            # ── Notify customer portal users for this facility ──────────
             notify_customers_for_facility(
                 facility_id   = inspection.facility_id,
                 event_type    = EVENT_CUSTOMER_INSPECTION_DONE,
@@ -381,7 +359,7 @@ def execute(inspection_id):
                 link          = url_for('inspections.view', inspection_id=inspection.id),
                 inspection_id = inspection.id,
             )
-            db.session.commit()  # Commit notifications
+            db.session.commit()
             log_action(ACTION_UPDATE, 'Inspection', inspection.id,
                        f'{inspection.template.name} @ {inspection.facility.name}',
                        f'status=completed; score={score}')
@@ -389,7 +367,7 @@ def execute(inspection_id):
             flash('Inspection submitted successfully!', 'success')
             return redirect(url_for('inspections.view', inspection_id=inspection_id))
 
-        else:  # save draft
+        else:
             _save_draft(inspection, responses)
             db.session.commit()
             flash('Draft saved. You can continue filling in the form later.', 'success')
@@ -414,20 +392,16 @@ def _save_responses(inspection, responses):
 
 
 def _save_draft(inspection, responses):
-    """Save a draft of form responses — same storage as final, just status stays in_progress."""
+    """Save a draft — same storage as final, status stays in_progress."""
     _save_responses(inspection, responses)
     db.session.commit()
 
 
-# ── AJAX: save draft (used by Flag Issue button before navigating away) ───────
+# ── AJAX: save draft ──────────────────────────────────────────────────────────
 
 @bp.route('/<int:inspection_id>/save-draft', methods=['POST'])
 @login_required
 def save_draft_ajax(inspection_id):
-    """
-    Accepts a JSON body of { field_id: value } and persists it as a draft.
-    Returns JSON { ok: true } on success so the caller can navigate to flag_issue.
-    """
     inspection = Inspection.query.get_or_404(inspection_id)
 
     if current_user.role == 'inspector' and inspection.inspector_id != current_user.id:
@@ -439,7 +413,6 @@ def save_draft_ajax(inspection_id):
     data = request.get_json(silent=True) or {}
     responses = data.get('responses', {})
 
-    # Merge with any previously saved responses so photo paths are preserved
     existing_responses = {}
     if inspection.notes:
         try:
@@ -449,10 +422,7 @@ def save_draft_ajax(inspection_id):
         except (json.JSONDecodeError, TypeError):
             pass
 
-    # Only overwrite keys that are present in the submitted data;
-    # preserve photo paths for image fields not included in the JSON payload.
     merged = {**existing_responses, **responses}
-
     _save_responses(inspection, merged)
     db.session.commit()
 
@@ -483,7 +453,6 @@ def view(inspection_id):
     form_fields = sorted(template.get_form_schema(),
                          key=lambda f: (f.get('row', 0), f.get('col', 0)))
 
-    # Decode saved responses
     form_data = {}
     if inspection.notes:
         try:
@@ -496,14 +465,16 @@ def view(inspection_id):
     issues = inspection.issues.order_by(Issue.reported_at.desc()).all()
 
     # ── Score comparison against parent inspection ────────────────────────
-    # Scores live in form_data (field_id -> value) inside inspection.notes,
-    # NOT in InspectionResult checklist rows. We walk the shared form_fields
-    # schema and compare current vs. parent responses per scoreable field.
+    # Scores live in form_data (field_id -> value) inside inspection.notes.
+    # We walk the shared form_fields schema and compare current vs. parent
+    # responses per scoreable field, resolving item names via three strategies:
+    #   1. Leftmost text field value on the same grid row (e.g. "Brick Floor")
+    #   2. field['label'] if explicitly set
+    #   3. Nearest preceding section/label element text
     comparison = None
     if inspection.parent and inspection.parent.status == 'completed':
         parent = inspection.parent
 
-        # Decode parent form_data from its notes field
         parent_form_data = {}
         if parent.notes:
             try:
@@ -515,33 +486,19 @@ def view(inspection_id):
 
         scoreable_types = ('rating', 'checkbox', 'radio')
 
-        # Build a label lookup keyed by field ID using three strategies in priority order:
-        #
-        # 1. Same-row text value: a text/textarea field on the same grid row whose
-        #    submitted value (e.g. "Brick Floor") is the item name. This is the most
-        #    specific and matches the pattern shown in the inspection form.
-        # 2. field['label']: the field's own label property if explicitly set.
-        # 3. Preceding label element: the nearest 'label'-type field above in the schema
-        #    (uses text_content, which is what the form builder stores label text in).
-        #
-        # We build row→text_value and row→section_label maps in one pass,
-        # then resolve each scoreable field's display name.
-
-        # Map: grid row → text field value from current form_data (item name column)
-        _row_text_val = {}
-        # Map: grid row → text field value from parent form_data
-        _row_text_val_parent = {}
-        # Map: field_id → nearest preceding label text_content
-        _preceding_label = {}
-        _last_label_text = ''
+        # Collect all text/textarea fields per row, keyed by (col, fid)
+        # so we can pick the leftmost non-empty value as the item name.
+        _row_text_candidates = {}   # row → [(col, fid), ...]
+        _preceding_label     = {}   # field_id → nearest section/label text
+        _last_label_text     = ''
 
         for _f in form_fields:
             _ftype = _f.get('type')
             _frow  = _f.get('row', 0)
+            _fcol  = _f.get('col', 0)
             _fid   = str(_f.get('id', ''))
 
             if _ftype == 'label':
-                # label elements store their text in text_content, not label
                 _last_label_text = (
                     _f.get('text_content')
                     or _f.get('label')
@@ -549,15 +506,9 @@ def view(inspection_id):
                     or _last_label_text
                 )
             elif _ftype in ('text', 'textarea'):
-                # Record the submitted value of text fields indexed by row
-                _cur_txt = str(form_data.get(_fid, '')).strip()
-                _par_txt = str(parent_form_data.get(_fid, '')).strip()
-                if _cur_txt:
-                    _row_text_val[_frow] = _cur_txt
-                elif _par_txt:
-                    _row_text_val[_frow] = _par_txt
-                if _par_txt:
-                    _row_text_val_parent[_frow] = _par_txt
+                if _frow not in _row_text_candidates:
+                    _row_text_candidates[_frow] = []
+                _row_text_candidates[_frow].append((_fcol, _fid))
             elif _ftype == 'section':
                 _last_label_text = (
                     _f.get('label') or _f.get('text_content') or _last_label_text
@@ -565,16 +516,25 @@ def view(inspection_id):
             elif _ftype in scoreable_types:
                 _preceding_label[_fid] = _last_label_text
 
+        # Resolve row → item name: leftmost text field with a non-empty value
+        _row_text_val = {}
+        for _frow, _candidates in _row_text_candidates.items():
+            for _fcol, _fid in sorted(_candidates):
+                _val = (
+                    str(form_data.get(_fid, '')).strip()
+                    or str(parent_form_data.get(_fid, '')).strip()
+                )
+                if _val:
+                    _row_text_val[_frow] = _val
+                    break
+
         def _resolve_label(field, fid):
             frow = field.get('row', 0)
-            # Priority 1: same-row text field value (the item name)
             if frow in _row_text_val:
                 return _row_text_val[frow]
-            # Priority 2: field's own label property
             own = field.get('label') or field.get('placeholder')
             if own:
                 return own
-            # Priority 3: nearest preceding label element
             return _preceding_label.get(fid) or fid
 
         rows = []
@@ -687,7 +647,6 @@ def flag_issue(inspection_id):
             issue.id, inspection_id, issue.severity, issue.assigned_to, current_user.username
         )
 
-        # ── Notify the assignee of the flagged issue ─────────────────────
         if issue.assigned_to:
             assignee = User.query.get(issue.assigned_to)
             if assignee and assignee.id != current_user.id:
@@ -706,9 +665,8 @@ def flag_issue(inspection_id):
                     event_type    = EVENT_ISSUE_ASSIGNED,
                     send_email    = True,
                 )
-                db.session.commit()  # Commit notification
+                db.session.commit()
 
-        # ── Notify customer portal users for this facility ──────────
         notify_customers_for_facility(
             facility_id = inspection.facility_id,
             event_type  = EVENT_CUSTOMER_ISSUE_UPDATED,
@@ -732,7 +690,7 @@ def flag_issue(inspection_id):
                            form=form, inspection=inspection)
 
 
-# ── Export to PDF ────────────────────────────────────────────────────────────
+# ── Export to PDF ─────────────────────────────────────────────────────────────
 
 @bp.route('/<int:inspection_id>/export-pdf')
 @login_required
@@ -740,7 +698,6 @@ def export_pdf(inspection_id):
     """Generate and stream a PDF report for the given inspection."""
     inspection = Inspection.query.get_or_404(inspection_id)
 
-    # Inspectors may only export their own inspections
     if current_user.role == 'inspector' and inspection.inspector_id != current_user.id:
         flash('Access denied.', 'danger')
         return redirect(url_for('inspections.index'))
@@ -764,10 +721,8 @@ def export_pdf(inspection_id):
             pass
 
     issues = inspection.issues.order_by(Issue.reported_at.desc()).all()
-
     static_folder = os.path.join(current_app.root_path, 'static')
 
-    # Log image field values to help diagnose missing-photo issues in PDF export
     for field in form_fields:
         if field.get('type') == 'image':
             fid = str(field.get('id', ''))
@@ -779,11 +734,11 @@ def export_pdf(inspection_id):
             )
 
     pdf_bytes = generate_inspection_pdf(
-        inspection   = inspection,
-        form_fields  = form_fields,
-        form_data    = form_data,
-        issues       = issues,
-        static_folder= static_folder,
+        inspection    = inspection,
+        form_fields   = form_fields,
+        form_data     = form_data,
+        issues        = issues,
+        static_folder = static_folder,
     )
 
     filename = (f'inspection_{inspection.id}_'
@@ -859,8 +814,7 @@ def reinspect(inspection_id):
         flash('Access denied.', 'danger')
         return redirect(url_for('inspections.index'))
 
-    # Store parent context in session so start() can pick it up
-    session['reinspect_parent_id']  = parent.id
+    session['reinspect_parent_id']   = parent.id
     session['reinspect_template_id'] = parent.template_id
     session['reinspect_facility_id'] = parent.facility_id
     flash(
@@ -879,15 +833,12 @@ def reinspect(inspection_id):
 def delete(inspection_id):
     inspection = Inspection.query.get_or_404(inspection_id)
 
-    # Capture identifiers for the log before deletion
-    insp_id       = inspection.id
-    insp_date     = inspection.inspection_date.strftime('%Y-%m-%d %H:%M')
-    facility_name = inspection.facility.name
-    template_name = inspection.template.name
+    insp_id        = inspection.id
+    insp_date      = inspection.inspection_date.strftime('%Y-%m-%d %H:%M')
+    facility_name  = inspection.facility.name
+    template_name  = inspection.template.name
     inspector_name = inspection.inspector.username
 
-    # ── Clean up uploaded photos from disk ────────────────────────────────
-    # Collect photo paths from form data (inspection_photos) and issues
     photo_paths = []
     if inspection.notes:
         try:
@@ -903,19 +854,18 @@ def delete(inspection_id):
         if issue.photo_path:
             photo_paths.append(issue.photo_path)
 
-    # Delete the inspection record (cascade removes results and issues)
     db.session.delete(inspection)
     db.session.commit()
 
-    # Remove photo files after successful DB commit
     for rel_path in photo_paths:
-        abs_path = os.path.join(current_app.config['UPLOAD_FOLDER'], '..', 'static', rel_path)
-        abs_path = os.path.normpath(abs_path)
+        abs_path = os.path.normpath(
+            os.path.join(current_app.config['UPLOAD_FOLDER'], '..', 'static', rel_path)
+        )
         try:
             if os.path.isfile(abs_path):
                 os.remove(abs_path)
         except OSError:
-            pass  # Non-fatal: log but don't block the response
+            pass
 
     current_app.logger.info(
         'INSPECTION DELETED | id=%s | facility="%s" | template="%s" | '
