@@ -518,7 +518,7 @@ def view(inspection_id):
                     or _f.get('text')
                     or _last_label_text
                 )
-            elif _ftype in ('text', 'textarea'):
+            elif _ftype in ('text', 'textarea', 'select'):
                 if _frow not in _row_text_candidates:
                     _row_text_candidates[_frow] = []
                 _row_text_candidates[_frow].append((_fcol, _fid))
