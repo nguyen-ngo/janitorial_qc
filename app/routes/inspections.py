@@ -514,6 +514,27 @@ def view(inspection_id):
                 pass
 
         scoreable_types = ('rating', 'checkbox', 'radio')
+
+        # Build a label-text lookup keyed by field ID.
+        # Some fields carry their label directly in field['label']; others rely
+        # on a separate 'label'-type element that precedes them in the schema.
+        # We do a single forward pass: accumulate the last-seen label text and
+        # assign it to any unlabelled scoreable field that follows.
+        _last_label_text = ''
+        _field_label_map = {}
+        for _f in form_fields:
+            if _f.get('type') == 'label':
+                _last_label_text = _f.get('label') or _f.get('text') or _last_label_text
+            elif _f.get('type') in scoreable_types:
+                _fid = str(_f.get('id', ''))
+                # Prefer the field's own label; fall back to the nearest preceding label element
+                _field_label_map[_fid] = (
+                    _f.get('label')
+                    or _f.get('placeholder')
+                    or _last_label_text
+                    or _fid
+                )
+
         rows = []
 
         for field in form_fields:
@@ -521,8 +542,8 @@ def view(inspection_id):
             if ftype not in scoreable_types:
                 continue
 
-            fid   = field.get('id', '')
-            label = field.get('label') or field.get('placeholder') or fid
+            fid   = str(field.get('id', ''))
+            label = _field_label_map.get(fid) or fid
 
             cur_val = form_data.get(fid, '')
             par_val = parent_form_data.get(fid, '')
