@@ -477,7 +477,7 @@ def view(inspection_id):
                     parent_form_data = parsed_p.get('_form_data', {})
             except (json.JSONDecodeError, TypeError):
                 pass
-
+        '''
         # ── DEBUG: log raw schema + form_data so we can see what's actually stored ──
         current_app.logger.warning(
             'COMPARISON DEBUG | inspection_id=%s | current_form_data=%s',
@@ -496,7 +496,7 @@ def view(inspection_id):
             ])
         )
         # ── END DEBUG ──
-
+        '''
         scoreable_types = ('rating', 'checkbox', 'radio')
 
         # Collect all text/textarea fields per row, keyed by (col, fid)
@@ -595,7 +595,7 @@ def view(inspection_id):
                 'current_pct': cur_pct,
                 'delta':       delta,
             })
-            
+
         # ── Deduplicate rows by item name ─────────────────────────────────
         # When the template changes between inspections (e.g. a select field on
         # row 7 becomes a text field on row 11), the same item name can appear
@@ -620,7 +620,9 @@ def view(inspection_id):
             else:
                 _seen[key] = len(merged_rows)
                 merged_rows.append(r)
-        rows = merged_rows
+        # Drop any rows that are still unanswered on both sides after merging
+        rows = [r for r in merged_rows
+                if not (r['parent_pct'] is None and r['current_pct'] is None)]
 
         comparison = {
             'parent_id':     parent.id,
