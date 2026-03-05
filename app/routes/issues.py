@@ -543,7 +543,7 @@ def verification_queue():
     # Sort facilities alphabetically
     grouped = sorted(by_facility.items(), key=lambda x: x[0].name)
 
-    logger.info(
+    current_app.logger.info(
         'VERIFICATION QUEUE VIEWED | user=%s | pending_count=%s',
         current_user.username, len(pending),
     )
