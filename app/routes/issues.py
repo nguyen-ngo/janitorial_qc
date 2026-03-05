@@ -516,4 +516,45 @@ def request_verification(issue_id):
     flash('Issue marked as pending verification. Supervisors have been notified.', 'info')
     return redirect(url_for('issues.view', issue_id=issue_id))
 
+# ── Verification queue ────────────────────────────────────────────────────────
+
+@bp.route('/verification-queue')
+@login_required
+@supervisor_required
+def verification_queue():
+    """Supervisor queue of all issues awaiting verification, grouped by facility."""
+    from app.models.facility import Facility, Area
+    from app.utils.sla import sla_status, sla_hours_remaining
+
+    pending = (
+        Issue.query
+        .join(Area, Issue.area_id == Area.id)
+        .filter(Issue.status == 'pending_verification')
+        .order_by(Area.facility_id, Issue.reported_at.asc())
+        .all()
+    )
+
+    # Group by facility for display
+    from collections import defaultdict
+    by_facility = defaultdict(list)
+    for issue in pending:
+        by_facility[issue.area.facility].append(issue)
+
+    # Sort facilities alphabetically
+    grouped = sorted(by_facility.items(), key=lambda x: x[0].name)
+
+    logger.info(
+        'VERIFICATION QUEUE VIEWED | user=%s | pending_count=%s',
+        current_user.username, len(pending),
+    )
+
+    return render_template(
+        'issues/verification_queue.html',
+        grouped       = grouped,
+        total_pending = len(pending),
+        sla_status    = sla_status,
+        sla_hours_remaining = sla_hours_remaining,
+    )
+
+
     return render_template('issues/form.html', form=form, title='Log New Issue')

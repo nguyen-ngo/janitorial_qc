@@ -84,9 +84,28 @@
                         <a class="nav-link" href="{{ url_for('scheduled_reports.index') }}">Scheduled Reports</a>
                     </li>
                     {% endif %}
+                    {% if current_user.role in ['admin','supervisor'] %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('scheduled_reports.index') }}">Scheduled Reports</a>
+                    </li>
+                    {% endif %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('issues.index') }}">Issues</a>
                     </li>
+                    {% if current_user.role in ['admin', 'supervisor'] %}
+                    <li class="nav-item">
+                        <a class="nav-link d-flex align-items-center gap-1"
+                           href="{{ url_for('issues.verification_queue') }}">
+                          Verify
+                          {% if pending_verification_count and pending_verification_count > 0 %}
+                          <span class="badge bg-info text-dark"
+                                style="font-size:.65rem;line-height:1;">
+                            {{ pending_verification_count }}
+                          </span>
+                          {% endif %}
+                        </a>
+                    </li>
+                    {% endif %}
                     {% if current_user.role == 'admin' %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('auth.list_users') }}">Users</a>

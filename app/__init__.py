@@ -90,13 +90,23 @@ def create_app(config_name='default'):
         try:
             if current_user.is_authenticated:
                 from app.models.notification import Notification
-                count = Notification.query.filter_by(
+                from app.models.issue import Issue
+                unread = Notification.query.filter_by(
                     user_id=current_user.id, is_read=False
                 ).count()
-                return {'unread_notification_count': count}
+                # Pending verification count — only computed for supervisor+ roles
+                pv_count = 0
+                if current_user.role in ('admin', 'supervisor'):
+                    pv_count = Issue.query.filter_by(
+                        status='pending_verification'
+                    ).count()
+                return {
+                    'unread_notification_count':   unread,
+                    'pending_verification_count':  pv_count,
+                }
         except Exception:
             pass
-        return {'unread_notification_count': 0}
+        return {'unread_notification_count': 0, 'pending_verification_count': 0}
 
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
