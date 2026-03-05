@@ -495,11 +495,79 @@ def view(inspection_id):
 
     issues = inspection.issues.order_by(Issue.reported_at.desc()).all()
 
+    # ── Score comparison against parent inspection ────────────────────────
+    # Produces a list of per-item dicts so the template can render a
+    # side-by-side delta table without any additional queries at render time.
+    comparison = None
+    if inspection.parent and inspection.parent.status == 'completed':
+        parent = inspection.parent
+
+        # Index parent results by checklist_item_id
+        parent_results = {
+            r.checklist_item_id: r
+            for r in parent.results.all()
+        }
+
+        rows = []
+        for result in inspection.results.order_by(
+            InspectionResult.checklist_item_id
+        ).all():
+            item   = result.checklist_item
+            p_res  = parent_results.get(result.checklist_item_id)
+
+            # Normalise scores to a 0–100 percentage for fair comparison
+            def _pct(res, ci):
+                if res is None:
+                    return None
+                if ci.scoring_type == 'pass_fail':
+                    if res.passed is None:
+                        return None
+                    return 100.0 if res.passed else 0.0
+                if ci.scoring_type == 'rating_5':
+                    return (float(res.score) / 5 * 100) if res.score is not None else None
+                if ci.scoring_type == 'rating_10':
+                    return (float(res.score) / 10 * 100) if res.score is not None else None
+                return None
+
+            cur_pct = _pct(result, item)
+            par_pct = _pct(p_res, item) if p_res else None
+
+            if cur_pct is None and par_pct is None:
+                continue   # skip unanswered items on both sides
+
+            delta = None
+            if cur_pct is not None and par_pct is not None:
+                delta = round(cur_pct - par_pct, 1)
+
+            rows.append({
+                'category':    item.category or 'Uncategorised',
+                'description': item.item_description,
+                'parent_pct':  round(par_pct, 1) if par_pct is not None else None,
+                'current_pct': round(cur_pct, 1) if cur_pct is not None else None,
+                'delta':       delta,
+            })
+
+        comparison = {
+            'parent_id':    parent.id,
+            'parent_date':  parent.inspection_date,
+            'parent_score': float(parent.overall_score) if parent.overall_score else None,
+            'current_score': float(inspection.overall_score) if inspection.overall_score else None,
+            'score_delta':  (
+                round(float(inspection.overall_score) - float(parent.overall_score), 2)
+                if inspection.overall_score and parent.overall_score else None
+            ),
+            'rows': rows,
+            'improved':  sum(1 for r in rows if r['delta'] is not None and r['delta'] > 0),
+            'regressed': sum(1 for r in rows if r['delta'] is not None and r['delta'] < 0),
+            'unchanged': sum(1 for r in rows if r['delta'] == 0),
+        }
+
     return render_template('inspections/view.html',
                            inspection=inspection,
                            form_fields=form_fields,
                            form_data=form_data,
-                           issues=issues)
+                           issues=issues,
+                           comparison=comparison)
 
 
 # ── Flag issue during inspection ──────────────────────────────────────────────
