@@ -595,6 +595,32 @@ def view(inspection_id):
                 'current_pct': cur_pct,
                 'delta':       delta,
             })
+            
+        # ── Deduplicate rows by item name ─────────────────────────────────
+        # When the template changes between inspections (e.g. a select field on
+        # row 7 becomes a text field on row 11), the same item name can appear
+        # twice — once with only a parent value and once with only a current value.
+        # Merge those pairs into a single row so "Carpet 80%→100%" shows as one line.
+        _seen = {}   # label → index in merged_rows
+        merged_rows = []
+        for r in rows:
+            key = r['description'].strip().lower()
+            if key in _seen:
+                existing = merged_rows[_seen[key]]
+                # Fill in whichever side is missing
+                if existing['parent_pct'] is None and r['parent_pct'] is not None:
+                    existing['parent_pct'] = r['parent_pct']
+                if existing['current_pct'] is None and r['current_pct'] is not None:
+                    existing['current_pct'] = r['current_pct']
+                # Recompute delta after merge
+                if existing['parent_pct'] is not None and existing['current_pct'] is not None:
+                    existing['delta'] = round(existing['current_pct'] - existing['parent_pct'], 1)
+                else:
+                    existing['delta'] = None
+            else:
+                _seen[key] = len(merged_rows)
+                merged_rows.append(r)
+        rows = merged_rows
 
         comparison = {
             'parent_id':     parent.id,
