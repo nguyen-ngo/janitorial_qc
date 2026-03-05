@@ -515,25 +515,67 @@ def view(inspection_id):
 
         scoreable_types = ('rating', 'checkbox', 'radio')
 
-        # Build a label-text lookup keyed by field ID.
-        # Some fields carry their label directly in field['label']; others rely
-        # on a separate 'label'-type element that precedes them in the schema.
-        # We do a single forward pass: accumulate the last-seen label text and
-        # assign it to any unlabelled scoreable field that follows.
+        # Build a label lookup keyed by field ID using three strategies in priority order:
+        #
+        # 1. Same-row text value: a text/textarea field on the same grid row whose
+        #    submitted value (e.g. "Brick Floor") is the item name. This is the most
+        #    specific and matches the pattern shown in the inspection form.
+        # 2. field['label']: the field's own label property if explicitly set.
+        # 3. Preceding label element: the nearest 'label'-type field above in the schema
+        #    (uses text_content, which is what the form builder stores label text in).
+        #
+        # We build row→text_value and row→section_label maps in one pass,
+        # then resolve each scoreable field's display name.
+
+        # Map: grid row → text field value from current form_data (item name column)
+        _row_text_val = {}
+        # Map: grid row → text field value from parent form_data
+        _row_text_val_parent = {}
+        # Map: field_id → nearest preceding label text_content
+        _preceding_label = {}
         _last_label_text = ''
-        _field_label_map = {}
+
         for _f in form_fields:
-            if _f.get('type') == 'label':
-                _last_label_text = _f.get('label') or _f.get('text') or _last_label_text
-            elif _f.get('type') in scoreable_types:
-                _fid = str(_f.get('id', ''))
-                # Prefer the field's own label; fall back to the nearest preceding label element
-                _field_label_map[_fid] = (
-                    _f.get('label')
-                    or _f.get('placeholder')
+            _ftype = _f.get('type')
+            _frow  = _f.get('row', 0)
+            _fid   = str(_f.get('id', ''))
+
+            if _ftype == 'label':
+                # label elements store their text in text_content, not label
+                _last_label_text = (
+                    _f.get('text_content')
+                    or _f.get('label')
+                    or _f.get('text')
                     or _last_label_text
-                    or _fid
                 )
+            elif _ftype in ('text', 'textarea'):
+                # Record the submitted value of text fields indexed by row
+                _cur_txt = str(form_data.get(_fid, '')).strip()
+                _par_txt = str(parent_form_data.get(_fid, '')).strip()
+                if _cur_txt:
+                    _row_text_val[_frow] = _cur_txt
+                elif _par_txt:
+                    _row_text_val[_frow] = _par_txt
+                if _par_txt:
+                    _row_text_val_parent[_frow] = _par_txt
+            elif _ftype == 'section':
+                _last_label_text = (
+                    _f.get('label') or _f.get('text_content') or _last_label_text
+                )
+            elif _ftype in scoreable_types:
+                _preceding_label[_fid] = _last_label_text
+
+        def _resolve_label(field, fid):
+            frow = field.get('row', 0)
+            # Priority 1: same-row text field value (the item name)
+            if frow in _row_text_val:
+                return _row_text_val[frow]
+            # Priority 2: field's own label property
+            own = field.get('label') or field.get('placeholder')
+            if own:
+                return own
+            # Priority 3: nearest preceding label element
+            return _preceding_label.get(fid) or fid
 
         rows = []
 
@@ -543,7 +585,7 @@ def view(inspection_id):
                 continue
 
             fid   = str(field.get('id', ''))
-            label = _field_label_map.get(fid) or fid
+            label = _resolve_label(field, fid)
 
             cur_val = form_data.get(fid, '')
             par_val = parent_form_data.get(fid, '')
@@ -574,7 +616,7 @@ def view(inspection_id):
                 delta = round(cur_pct - par_pct, 1)
 
             rows.append({
-                'category':    field.get('section') or field.get('category') or 'General',
+                'category':    _preceding_label.get(fid) or field.get('category') or 'General',
                 'description': label,
                 'parent_pct':  par_pct,
                 'current_pct': cur_pct,
