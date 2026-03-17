@@ -3,15 +3,17 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_migrate import Migrate
 from flask_mail import Mail
+from flask_wtf.csrf import CSRFProtect
 from config import config
 import os
 import logging
 from logging.handlers import RotatingFileHandler
 
-db           = SQLAlchemy()
+db            = SQLAlchemy()
 login_manager = LoginManager()
-migrate      = Migrate()
-mail         = Mail()
+migrate       = Migrate()
+mail          = Mail()
+csrf          = CSRFProtect()    # initialized here; .init_app() called in create_app()
 
 
 def create_app(config_name='default'):
@@ -22,6 +24,7 @@ def create_app(config_name='default'):
     login_manager.init_app(app)
     migrate.init_app(app, db)
     mail.init_app(app)
+    csrf.init_app(app)    # enables CSRF protection for all web routes
 
     login_manager.login_view         = 'auth.login'
     login_manager.login_message      = 'Please log in to access this page.'
@@ -69,6 +72,8 @@ def create_app(config_name='default'):
 
     # Register csrf_token() as an app-wide Jinja2 global so templates that
     # render manual forms (no WTForms object) can still inject the CSRF token.
+    # CSRFProtect (initialized above) is the authoritative guard for web routes;
+    # the /api/v1 blueprint is exempted below via csrf.exempt().
     from flask_wtf.csrf import generate_csrf
     app.jinja_env.globals['csrf_token'] = generate_csrf
     app.jinja_env.globals['enumerate']  = enumerate
@@ -131,8 +136,12 @@ def create_app(config_name='default'):
     app.register_blueprint(customers.bp)
     app.register_blueprint(scheduled_reports.bp)
 
-    # ── Mobile API ─────────────────────────────────────────────
-    from app.api import register_api
+    # ── Mobile API (Phase 7) ─────────────────────────────────────────────────
+    # The /api/v1 blueprint uses JWT Bearer tokens — no CSRF cookies needed.
+    # Exempt it from CSRFProtect before registering so POST /api/v1/* routes
+    # are never rejected for a missing CSRF token.
+    from app.api import register_api, api_bp
+    csrf.exempt(api_bp)
     register_api(app)
 
     # ── Error handler: 413 Request Entity Too Large ───────────────────────

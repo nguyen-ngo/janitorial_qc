@@ -31,8 +31,6 @@ GET /api/v1/auth/me
 import logging
 
 from flask import Blueprint, request, g
-from flask_wtf.csrf import csrf_exempt
-
 from app import db
 from app.models.user import User
 from app.models.api_token import RefreshToken, DeviceToken
@@ -61,7 +59,6 @@ def _user_payload(user: User) -> dict:
 # ── Login ─────────────────────────────────────────────────────────────────────
 
 @bp.route('/auth/login', methods=['POST'])
-@csrf_exempt
 def login():
     """
     Authenticate with username + password.
@@ -137,7 +134,6 @@ def login():
 # ── Refresh ───────────────────────────────────────────────────────────────────
 
 @bp.route('/auth/refresh', methods=['POST'])
-@csrf_exempt
 def refresh():
     """
     Exchange a valid refresh token for a new access token.
@@ -207,7 +203,6 @@ def refresh():
 # ── Logout ────────────────────────────────────────────────────────────────────
 
 @bp.route('/auth/logout', methods=['POST'])
-@csrf_exempt
 @jwt_required
 def logout():
     """
@@ -261,7 +256,6 @@ def me():
 # ── Device token registration ─────────────────────────────────────────────────
 
 @bp.route('/devices/register', methods=['POST'])
-@csrf_exempt
 @jwt_required
 def register_device():
     """
