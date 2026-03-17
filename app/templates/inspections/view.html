@@ -559,6 +559,18 @@
                     {% endif %}
                   </div>
 
+                {% elif ftype == 'pass_fail' %}
+                  <span class="field-lbl">{{ field.label }}</span>
+                  <div class="field-val">
+                    {% if val and val.lower() in ('pass','yes','ok','good','acceptable','compliant') %}
+                      <span class="text-success"><i class="bi bi-check-circle-fill"></i> {{ val }}</span>
+                    {% elif val %}
+                      <span class="text-danger"><i class="bi bi-x-circle-fill"></i> {{ val }}</span>
+                    {% else %}
+                      <span style="font-size:.72rem;color:#94a3b8;font-style:italic;">Not answered</span>
+                    {% endif %}
+                  </div>
+
                 {% elif ftype == 'checkbox' %}
                   <span class="field-lbl">{{ field.label }}</span>
                   <div class="field-val">

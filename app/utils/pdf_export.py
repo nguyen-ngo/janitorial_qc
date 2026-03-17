@@ -386,6 +386,8 @@ def _form_fields_section(form_fields, form_data, static_folder):
                 if ftype == 'checkbox':
                     # stored as 'true'/'false' by _collect_form_responses
                     return val not in ('yes', 'true')
+                if ftype == 'pass_fail':
+                    return not val
                 if ftype == 'checkbox_group':
                     return not val or not isinstance(val, list) or len(val) == 0
                 if ftype == 'table':
@@ -428,6 +430,14 @@ def _form_fields_section(form_fields, form_data, static_folder):
 
             elif ftype == 'checkbox':
                 val_p = Paragraph('Yes', STYLES['FieldValue'])
+
+            elif ftype == 'pass_fail':
+                is_pass = str(val).lower() in ('pass', 'yes', 'ok', 'good', 'acceptable', 'compliant')
+                colour = C_GREEN if is_pass else C_RED
+                val_p = Paragraph(
+                    f'<font color="{colour.hexval()}">{str(val)}</font>',
+                    STYLES['FieldValue'],
+                )
 
             elif ftype == 'checkbox_group':
                 val_p = Paragraph(',  '.join(val), STYLES['FieldValue'])

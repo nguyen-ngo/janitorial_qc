@@ -229,7 +229,7 @@ def save_form_schema(template_id):
             'label':        str(field.get('label', 'Untitled'))[:255],
             'placeholder':  str(field.get('placeholder', ''))[:255],
             'required':     bool(field.get('required', False)),
-            'options':      field.get('options', []) if ftype in ('radio', 'checkbox_group', 'select') else [],
+            'options':      field.get('options', []) if ftype in ('radio', 'checkbox_group', 'select', 'pass_fail') else [],
             'help_text':    str(field.get('help_text', ''))[:500],
             'order':        int(field.get('order', 0)),
             # Grid position & size

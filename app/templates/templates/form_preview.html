@@ -248,6 +248,19 @@
           {% endfor %}
           {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
 
+        {% elif field.type == 'pass_fail' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="text-danger">*</span>{% endif %}</label>
+          {% set pf_options = field.options if field.options else ['Pass', 'Fail'] %}
+          <div style="display:flex;gap:.4rem;margin-top:.2rem;">
+            {% for opt in pf_options %}
+            {% set is_pass = opt.lower() in ('pass','yes','ok','good') %}
+            <span style="padding:.25rem .65rem;border-radius:20px;font-size:.78rem;font-weight:600;
+                         border:1.5px solid {{ '#16a34a' if is_pass else '#dc2626' }};
+                         color:{{ '#16a34a' if is_pass else '#dc2626' }};">{{ opt }}</span>
+            {% endfor %}
+          </div>
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
         {% elif field.type == 'select' %}
           <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
           <select class="form-select">

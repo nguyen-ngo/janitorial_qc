@@ -402,6 +402,7 @@
       ('checkbox_group', 'bi-ui-checks',        'Checkbox Group'),
       ('radio',          'bi-ui-radios',        'Radio Group'),
       ('select',         'bi-menu-button-wide', 'Dropdown'),
+      ('pass_fail',      'bi-check2-circle',    'Pass / Fail'),
     ] %}
     <div class="pal-item" draggable="true" data-ftype="{{ t }}" data-flabel="{{ lb }}">
       <i class="bi {{ ic }}"></i> {{ lb }}
@@ -480,7 +481,7 @@ const DEF_SIZE = {
   number:         [3, 2], date:           [4, 2],
   email:          [6, 2], checkbox:       [4, 2],
   checkbox_group: [5, 4], radio:          [5, 4],
-  select:         [5, 2], image:          [6, 4],
+  select:         [5, 2], pass_fail:      [4, 2], image:          [6, 4],
   signature:      [6, 3], rating:         [5, 2],
   section:        [12, 1], table:         [12, 5],
   label:          [6, 1],
@@ -490,7 +491,7 @@ const DEF_SIZE = {
 const LABELS = {
   text:'Text Input', textarea:'Text Area', number:'Number', date:'Date',
   email:'Email', checkbox:'Checkbox', checkbox_group:'Checkbox Group',
-  radio:'Radio Group', select:'Dropdown', image:'Image Upload',
+  radio:'Radio Group', select:'Dropdown', pass_fail:'Pass / Fail', image:'Image Upload',
   signature:'Signature', rating:'Rating (1–5)', section:'Section Header',
   table:'Table', label:'Label / Text',
   button_submit:'Submit Button', button_print:'Print Button', button_email:'Email Button',
@@ -586,7 +587,7 @@ function mkField(type, col, row) {
     placeholder: '',
     required:    false,
     help_text:   '',
-    options:     ['radio','checkbox_group','select'].includes(type) ? ['Option 1','Option 2'] : [],
+    options:     type === 'pass_fail' ? ['Pass','Fail'] : ['radio','checkbox_group','select'].includes(type) ? ['Option 1','Option 2'] : [],
     table_cols:  isTable ? 3 : undefined,
     table_rows:  isTable ? 3 : undefined,
     col_headers: isTable ? ['Column 1','Column 2','Column 3'] : undefined,
@@ -745,6 +746,12 @@ function mkPreview(f) {
       return `${lbl}<div class="mock-sig">Sign here…</div>`;
     case 'rating':
       return `${lbl}<div style="font-size:1.2rem;color:#f59e0b;letter-spacing:.15rem;">★★★★★</div>`;
+    case 'pass_fail': {
+      const pfOpts = f.options || ['Pass','Fail'];
+      return `${lbl}<div style="display:flex;gap:.35rem;">${pfOpts.map(o =>
+        `<span style="display:inline-block;padding:.15rem .55rem;border-radius:20px;font-size:.72rem;font-weight:600;border:1.5px solid ${o.toLowerCase()==='pass'?'#16a34a':'#dc2626'};color:${o.toLowerCase()==='pass'?'#16a34a':'#dc2626'};">${esc(o)}</span>`
+      ).join('')}</div>`;
+    }
     case 'section':
       return `<div style="border-top:2px solid #e2e8f0;padding-top:.4rem;">
         <strong style="font-size:.86rem;color:#374151;">${esc(f.label)}</strong>
@@ -815,7 +822,7 @@ function renderProperties() {
   const f = fields.find(f => f.id === selectedId);
   if (!f) return;
   empty.style.display = 'none'; content.style.display = '';
-  const hasOpts  = ['radio','checkbox_group','select'].includes(f.type);
+  const hasOpts  = ['radio','checkbox_group','select','pass_fail'].includes(f.type);
   const isSec    = f.type === 'section';
   const isLabel  = f.type === 'label';
   const isBtn    = f.type.startsWith('button_');

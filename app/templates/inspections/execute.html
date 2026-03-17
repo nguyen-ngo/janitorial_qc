@@ -330,6 +330,30 @@
           {% endfor %}
           {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
 
+        {# ── Pass / Fail ── #}
+        {% elif field.type == 'pass_fail' %}
+          <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>
+          {% set pf_options = field.options if field.options else ['Pass', 'Fail'] %}
+          <div class="pf-group" style="display:flex;gap:.5rem;flex-wrap:wrap;">
+            {% for opt in pf_options %}
+            {% set is_pass = opt.lower() in ('pass','yes','ok','good') %}
+            <label class="pf-btn{{ ' active' if saved == opt }}" data-color="{{ '#16a34a' if is_pass else '#dc2626' }}"
+                   style="display:flex;align-items:center;gap:.35rem;cursor:pointer;
+                          padding:.4rem .85rem;border-radius:20px;font-size:.84rem;font-weight:600;
+                          border:2px solid {{ '#16a34a' if is_pass else '#dc2626' }};
+                          color:{{ ('#fff' if saved == opt else ('#16a34a' if is_pass else '#dc2626')) }};
+                          background:{{ (('#16a34a' if is_pass else '#dc2626') if saved == opt else 'transparent') }};
+                          transition:background .15s,color .15s;">
+              <input type="radio" name="field_{{ fid }}" value="{{ opt }}"
+                     {{ 'checked' if saved == opt }}
+                     style="display:none;"
+                     onchange="var g=this.closest('.pf-group');g.querySelectorAll('.pf-btn').forEach(function(l){l.style.background='';l.style.color=l.dataset.color;});this.parentElement.style.background=this.parentElement.dataset.color;this.parentElement.style.color='#fff';">
+              <span>{{ opt }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+
         {# ── Select / Dropdown ── #}
         {% elif field.type == 'select' %}
           <label class="field-lbl">{{ field.label }}{% if field.required %}<span class="required-mark"> *</span>{% endif %}</label>

@@ -30,7 +30,7 @@ ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'gif'}
 INPUT_FIELD_TYPES = {
     'text', 'textarea', 'number', 'date', 'email',
     'checkbox', 'checkbox_group', 'radio', 'select',
-    'rating', 'signature', 'image', 'table'
+    'rating', 'pass_fail', 'signature', 'image', 'table'
 }
 
 
@@ -115,7 +115,7 @@ def _compute_score_from_form(form_fields, responses):
     Derive an overall score from rating fields and checkbox pass/fail fields.
     Returns a float 0–100 or None if the form has no scoreable fields.
     """
-    scoreable = [f for f in form_fields if f['type'] in ('rating', 'checkbox', 'radio')]
+    scoreable = [f for f in form_fields if f['type'] in ('rating', 'checkbox', 'radio', 'pass_fail')]
     if not scoreable:
         return None
 
@@ -140,6 +140,13 @@ def _compute_score_from_form(form_fields, responses):
                 earned += 1
 
         elif field['type'] == 'radio':
+            total += 1
+            if val.lower() in ('pass', 'yes', 'ok', 'good', 'acceptable', 'compliant'):
+                earned += 1
+
+        elif field['type'] == 'pass_fail':
+            if not val:
+                continue
             total += 1
             if val.lower() in ('pass', 'yes', 'ok', 'good', 'acceptable', 'compliant'):
                 earned += 1
@@ -478,7 +485,7 @@ def view(inspection_id):
             except (json.JSONDecodeError, TypeError):
                 pass
 
-        scoreable_types = ('rating', 'checkbox', 'radio')
+        scoreable_types = ('rating', 'checkbox', 'radio', 'pass_fail')
 
         # Collect all text/textarea fields per row, keyed by (col, fid)
         # so we can pick the leftmost non-empty value as the item name.
@@ -557,6 +564,10 @@ def view(inspection_id):
                     return 100.0 if val == 'true' else 0.0
                 if ft == 'radio':
                     return None if not val else 100.0
+                if ft == 'pass_fail':
+                    if not val:
+                        return None
+                    return 100.0 if val.lower() in ('pass', 'yes', 'ok', 'good', 'acceptable', 'compliant') else 0.0
                 return None
 
             cur_pct = _field_pct(cur_val, ftype)
