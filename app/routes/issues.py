@@ -117,14 +117,6 @@ def view(issue_id):
     form.assigned_to.choices = [(0, '— Unassigned —')] + [(u.id, u.username) for u in staff]
     form.status.data = form.status.data or issue.status
 
-    # Extend status choices to include pending_verification
-    form.status.choices = [
-        ('open', 'Open'),
-        ('in_progress', 'In Progress'),
-        ('pending_verification', 'Pending Verification'),
-        ('resolved', 'Resolved'),
-    ]
-
     if form.validate_on_submit():
         old_status      = issue.status
         old_assigned_to = issue.assigned_to
@@ -424,6 +416,8 @@ def create():
         flash('Issue created.', 'success')
         return redirect(url_for('issues.index'))
 
+    return render_template('issues/form.html', form=form, title='Log New Issue')
+
 
 # ── Supervisor verify resolved issue ─────────────────────────────────────────
 
@@ -555,6 +549,3 @@ def verification_queue():
         sla_status    = sla_status,
         sla_hours_remaining = sla_hours_remaining,
     )
-
-
-    return render_template('issues/form.html', form=form, title='Log New Issue')

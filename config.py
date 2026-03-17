@@ -33,7 +33,7 @@ class Config:
 
     # ── File uploads ────────────────────────────────────────────────────────
     UPLOAD_FOLDER = os.path.join(basedir, 'app/static/uploads')
-    MAX_CONTENT_LENGTH = 50 * 1024 * 1024   # 16 MB
+    MAX_CONTENT_LENGTH = 50 * 1024 * 1024   # 50 MB
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
     # ── Session / cookies ───────────────────────────────────────────────────

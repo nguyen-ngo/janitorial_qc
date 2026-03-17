@@ -110,7 +110,8 @@ def _build_report_data(report: ScheduledReport, start: datetime, end: datetime) 
             Inspection.status == 'completed',
             Inspection.overall_score.isnot(None),
         )
-        data['avg_score'] = round(float(_si(avg).scalar()), 2) if _si(avg).scalar() else None
+        avg_val = _si(avg).scalar()
+        data['avg_score'] = round(float(avg_val), 2) if avg_val else None
 
         data['open_issues'] = _iq(Issue.query.filter(
             Issue.status.in_(['open', 'in_progress'])

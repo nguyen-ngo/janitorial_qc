@@ -84,11 +84,6 @@
                         <a class="nav-link" href="{{ url_for('scheduled_reports.index') }}">Scheduled Reports</a>
                     </li>
                     {% endif %}
-                    {% if current_user.role in ['admin','supervisor'] %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('scheduled_reports.index') }}">Scheduled Reports</a>
-                    </li>
-                    {% endif %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('issues.index') }}">Issues</a>
                     </li>

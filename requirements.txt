@@ -11,4 +11,5 @@ Pillow
 WTForms
 email-validator
 gunicorn
+reportlab
 pytz

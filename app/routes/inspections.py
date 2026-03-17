@@ -477,26 +477,7 @@ def view(inspection_id):
                     parent_form_data = parsed_p.get('_form_data', {})
             except (json.JSONDecodeError, TypeError):
                 pass
-        '''
-        # ── DEBUG: log raw schema + form_data so we can see what's actually stored ──
-        current_app.logger.warning(
-            'COMPARISON DEBUG | inspection_id=%s | current_form_data=%s',
-            inspection_id, json.dumps(form_data)
-        )
-        current_app.logger.warning(
-            'COMPARISON DEBUG | parent_id=%s | parent_form_data=%s',
-            parent.id, json.dumps(parent_form_data)
-        )
-        current_app.logger.warning(
-            'COMPARISON DEBUG | form_fields=%s',
-            json.dumps([
-                {'id': f.get('id'), 'type': f.get('type'), 'row': f.get('row'),
-                 'col': f.get('col'), 'label': f.get('label'), 'text_content': f.get('text_content')}
-                for f in form_fields
-            ])
-        )
-        # ── END DEBUG ──
-        '''
+
         scoreable_types = ('rating', 'checkbox', 'radio')
 
         # Collect all text/textarea fields per row, keyed by (col, fid)

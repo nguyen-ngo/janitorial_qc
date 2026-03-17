@@ -167,7 +167,8 @@ class IssueForm(FlaskForm):
 
 class IssueUpdateForm(FlaskForm):
     status       = SelectField('Status', choices=[
-        ('open','Open'), ('in_progress','In Progress'), ('resolved','Resolved'),
+        ('open','Open'), ('in_progress','In Progress'),
+        ('pending_verification','Pending Verification'), ('resolved','Resolved'),
     ], validators=[DataRequired()])
     assigned_to  = SelectField('Assign To', coerce=int, validators=[Optional()])
     update_notes = TextAreaField('Update Notes', validators=[Optional(), Length(max=1000)])
