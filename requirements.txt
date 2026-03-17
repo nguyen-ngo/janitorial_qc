@@ -13,3 +13,4 @@ email-validator
 gunicorn
 reportlab
 pytz
+pyJWT

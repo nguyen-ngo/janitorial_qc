@@ -131,6 +131,10 @@ def create_app(config_name='default'):
     app.register_blueprint(customers.bp)
     app.register_blueprint(scheduled_reports.bp)
 
+    # ── Mobile API ─────────────────────────────────────────────
+    from app.api import register_api
+    register_api(app)
+
     # ── Error handler: 413 Request Entity Too Large ───────────────────────
     # Nginx can return 413 before Flask sees the request; this handler covers
     # the Flask-side rejection and gives users a clear, actionable message
