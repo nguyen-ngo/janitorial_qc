@@ -261,6 +261,47 @@
   {% endif %}
 </div>
 
+{# ── Facility Score Trend (30/60/90 days) ─────────────────────────────────── #}
+{% if all_facilities %}
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header bg-light fw-semibold d-flex align-items-center flex-wrap gap-2">
+        <i class="bi bi-graph-up-arrow me-1"></i>Facility Score Trend
+        <div class="ms-auto d-flex align-items-center gap-2" style="font-weight:normal;">
+          <select id="facTrendFacility" class="form-select form-select-sm" style="width:auto;min-width:180px;">
+            <option value="">— Select Facility —</option>
+            {% for f in all_facilities %}
+            <option value="{{ f.id }}">{{ f.name }}</option>
+            {% endfor %}
+          </select>
+          <div class="btn-group btn-group-sm" role="group">
+            <button type="button" class="btn btn-outline-primary active" data-days="30">30d</button>
+            <button type="button" class="btn btn-outline-primary" data-days="60">60d</button>
+            <button type="button" class="btn btn-outline-primary" data-days="90">90d</button>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="facTrendEmpty" class="text-center text-muted py-4">
+          <i class="bi bi-building fs-2 d-block mb-2 opacity-25"></i>
+          Select a facility to view its score trend.
+        </div>
+        <div id="facTrendLoading" class="text-center text-muted py-4" style="display:none;">
+          <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+          Loading trend data…
+        </div>
+        <canvas id="facTrendChart" height="120" style="display:none;"></canvas>
+        <div id="facTrendNoData" class="text-center text-muted py-4" style="display:none;">
+          <i class="bi bi-bar-chart-line fs-2 d-block mb-2 opacity-25"></i>
+          No completed inspections with scores for this facility in the selected period.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {# ── Recent activity ─────────────────────────────────────────────────────── #}
 <div class="card shadow-sm">
   <div class="card-header bg-light fw-semibold">
@@ -314,8 +355,9 @@
   </div>
 </div>
 
-{% if trend_labels %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+{% if trend_labels %}
 <script>
 (function () {
   const ctx    = document.getElementById('trendChart').getContext('2d');
@@ -349,6 +391,90 @@
         x: { grid: { display: false } }
       }
     }
+  });
+}());
+</script>
+{% endif %}
+
+{# ── Facility trend chart (AJAX-driven) ── #}
+{% if all_facilities %}
+<script>
+(function () {
+  const TREND_URL = '{{ url_for("dashboard.facility_trend") }}';
+  const select    = document.getElementById('facTrendFacility');
+  const dayBtns   = document.querySelectorAll('[data-days]');
+  const elEmpty   = document.getElementById('facTrendEmpty');
+  const elLoading = document.getElementById('facTrendLoading');
+  const elCanvas  = document.getElementById('facTrendChart');
+  const elNoData  = document.getElementById('facTrendNoData');
+
+  let currentDays = 30;
+  let facChart    = null;
+
+  function showState(state) {
+    elEmpty.style.display   = state === 'empty'   ? '' : 'none';
+    elLoading.style.display = state === 'loading' ? '' : 'none';
+    elCanvas.style.display  = state === 'chart'   ? '' : 'none';
+    elNoData.style.display  = state === 'nodata'  ? '' : 'none';
+  }
+
+  async function loadTrend() {
+    const fid = select.value;
+    if (!fid) { showState('empty'); return; }
+
+    showState('loading');
+    try {
+      const r = await fetch(TREND_URL + '?facility_id=' + fid + '&days=' + currentDays);
+      const d = await r.json();
+
+      if (!d.labels || d.labels.length === 0) { showState('nodata'); return; }
+
+      if (facChart) facChart.destroy();
+
+      showState('chart');
+      facChart = new Chart(elCanvas.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: d.labels,
+          datasets: [{
+            label: d.facility + ' — Avg Score (%)',
+            data: d.data,
+            borderColor:     '#0d9488',
+            backgroundColor: 'rgba(13,148,136,0.08)',
+            borderWidth: 2,
+            pointRadius: 4,
+            pointBackgroundColor: '#0d9488',
+            tension: 0.3,
+            fill: true,
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: true, position: 'top', labels: { font: { size: 12 } } },
+            tooltip: { callbacks: { label: ctx => ' ' + ctx.parsed.y + '%' } }
+          },
+          scales: {
+            y: { min: 0, max: 100, ticks: { callback: v => v + '%' }, grid: { color: 'rgba(0,0,0,.05)' } },
+            x: { grid: { display: false } }
+          }
+        }
+      });
+    } catch (err) {
+      console.error('Facility trend fetch error:', err);
+      showState('nodata');
+    }
+  }
+
+  select.addEventListener('change', loadTrend);
+
+  dayBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      dayBtns.forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      currentDays = parseInt(btn.dataset.days);
+      loadTrend();
+    });
   });
 }());
 </script>

@@ -646,3 +646,179 @@ def generate_inspection_pdf(inspection, form_fields, form_data, issues,
 
     doc.build(story, onFirstPage=_page_cb, onLaterPages=_page_cb)
     return buf.getvalue()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SCHEDULED REPORT PDF
+# ══════════════════════════════════════════════════════════════════════════════
+
+def generate_scheduled_report_pdf(report_name, frequency, start, end,
+                                  facility_name=None, data=None):
+    """Generate a PDF summary for a scheduled report email attachment.
+
+    Parameters
+    ----------
+    report_name   : str — the ScheduledReport.name
+    frequency     : str — 'daily' / 'weekly' / 'monthly'
+    start, end    : datetime — the reporting window
+    facility_name : str | None — scoped facility name, or None for all
+    data          : dict — the assembled report data from _build_report_data()
+
+    Returns
+    -------
+    bytes — the PDF content
+    """
+    if data is None:
+        data = {}
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=letter,
+        leftMargin=0.65 * inch, rightMargin=0.65 * inch,
+        topMargin=1.0 * inch, bottomMargin=0.65 * inch,
+    )
+
+    generated_at = datetime.now().strftime('%Y-%m-%d %H:%M')
+    title_text = f'{frequency.title()} Report — {report_name}'
+
+    def _page_cb(canvas, doc):
+        _on_page(canvas, doc, title_text, generated_at)
+
+    story = []
+    pw = letter[0] - 1.3 * inch  # usable page width
+
+    # ── Sub-header ────────────────────────────────────────────────────────
+    period = f'{start.strftime("%b %d, %Y")} — {end.strftime("%b %d, %Y")}'
+    scope = f'Facility: {facility_name}' if facility_name else 'All Facilities'
+    story.append(Paragraph(f'{period} · {scope}', STYLES['ReportSub']))
+    story.append(Spacer(1, 12))
+
+    # ── KPI cards (summary / facility report types) ───────────────────────
+    total_insp = data.get('total_inspections', 0)
+    completed  = data.get('completed', 0)
+    open_iss   = data.get('open_issues', 0)
+    avg_score  = data.get('avg_score')
+
+    kpi_data = [[
+        Paragraph('<b>Inspections</b>', STYLES['FieldLabel']),
+        Paragraph('<b>Completed</b>', STYLES['FieldLabel']),
+        Paragraph('<b>Open Issues</b>', STYLES['FieldLabel']),
+        Paragraph('<b>Avg Score</b>', STYLES['FieldLabel']),
+    ], [
+        Paragraph(f'<font size="14"><b>{total_insp}</b></font>', STYLES['FieldValue']),
+        Paragraph(f'<font size="14" color="{C_GREEN.hexval()}"><b>{completed}</b></font>', STYLES['FieldValue']),
+        Paragraph(f'<font size="14" color="{C_YELLOW.hexval()}"><b>{open_iss}</b></font>', STYLES['FieldValue']),
+        Paragraph(
+            f'<font size="14" color="{C_BLUE.hexval()}"><b>{f"{avg_score:.1f}%" if avg_score else "—"}</b></font>',
+            STYLES['FieldValue'],
+        ),
+    ]]
+    kpi_tbl = Table(kpi_data, colWidths=[pw * 0.25] * 4)
+    kpi_tbl.setStyle(TableStyle([
+        ('BACKGROUND',    (0, 0), (-1, -1), C_LIGHT),
+        ('ALIGN',         (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN',        (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING',    (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('BOX',           (0, 0), (-1, -1), 0.5, C_BORDER),
+        ('INNERGRID',     (0, 0), (-1, -1), 0.25, C_BORDER),
+        ('ROUNDEDCORNERS', [6, 6, 6, 6]),
+    ]))
+    story.append(kpi_tbl)
+    story.append(Spacer(1, 16))
+
+    # ── Facility scores table ─────────────────────────────────────────────
+    fac_scores = data.get('facility_scores', [])
+    if fac_scores:
+        story.append(Paragraph('Facility Scores', STYLES['SectionHead']))
+        tbl_data = [['Facility', 'Inspections', 'Avg Score']]
+        for row in fac_scores:
+            sc = float(row.avg) if hasattr(row, 'avg') else float(row[1])
+            cnt = row.count if hasattr(row, 'count') else row[2]
+            nm = row.name if hasattr(row, 'name') else row[0]
+            sc_color = C_GREEN if sc >= 90 else C_YELLOW if sc >= 70 else C_RED
+            tbl_data.append([
+                Paragraph(str(nm), STYLES['FieldValue']),
+                Paragraph(str(cnt), STYLES['FieldValue']),
+                Paragraph(f'<font color="{sc_color.hexval()}">{sc:.1f}%</font>', STYLES['FieldValue']),
+            ])
+        fac_tbl = Table(tbl_data, colWidths=[pw * 0.50, pw * 0.25, pw * 0.25])
+        fac_tbl.setStyle(TableStyle([
+            ('BACKGROUND',    (0, 0), (-1, 0), C_LIGHT),
+            ('FONTNAME',      (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE',      (0, 0), (-1, -1), 8),
+            ('ALIGN',         (1, 0), (-1, -1), 'CENTER'),
+            ('INNERGRID',     (0, 0), (-1, -1), 0.25, C_BORDER),
+            ('BOX',           (0, 0), (-1, -1), 0.5, C_BORDER),
+            ('TOPPADDING',    (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        story.append(fac_tbl)
+        story.append(Spacer(1, 14))
+
+    # ── Critical / High issues ────────────────────────────────────────────
+    crit_issues = data.get('critical_issues', [])
+    if crit_issues:
+        story.append(Paragraph('Open Critical / High Issues', STYLES['SectionHead']))
+        tbl_data = [['#', 'Severity', 'Facility / Area', 'Description', 'Reported']]
+        for iss in crit_issues:
+            sev_c = SEVERITY_COLORS.get(iss.severity, C_SLATE)
+            tbl_data.append([
+                Paragraph(f'#{iss.id}', STYLES['FieldValue']),
+                Paragraph(f'<font color="{sev_c.hexval()}">{iss.severity.title()}</font>', STYLES['FieldValue']),
+                Paragraph(f'{iss.area.facility.name} / {iss.area.name}', STYLES['FieldValue']),
+                Paragraph(iss.description[:80] + ('…' if len(iss.description) > 80 else ''), STYLES['IssueDesc']),
+                Paragraph(iss.reported_at.strftime('%b %d'), STYLES['FieldValue']),
+            ])
+        iss_tbl = Table(tbl_data, colWidths=[pw * 0.07, pw * 0.12, pw * 0.25, pw * 0.40, pw * 0.16])
+        iss_tbl.setStyle(TableStyle([
+            ('BACKGROUND',    (0, 0), (-1, 0), colors.HexColor('#fef2f2')),
+            ('FONTNAME',      (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE',      (0, 0), (-1, -1), 7.5),
+            ('INNERGRID',     (0, 0), (-1, -1), 0.25, C_BORDER),
+            ('BOX',           (0, 0), (-1, -1), 0.5, C_BORDER),
+            ('TOPPADDING',    (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
+        ]))
+        story.append(iss_tbl)
+        story.append(Spacer(1, 14))
+
+    # ── Open issues list (issues report type) ─────────────────────────────
+    all_issues = data.get('issues', [])
+    if all_issues and not crit_issues:
+        story.append(Paragraph(f'Open Issues ({len(all_issues)})', STYLES['SectionHead']))
+        tbl_data = [['#', 'Severity', 'Facility / Area', 'Status', 'Description']]
+        for iss in all_issues:
+            sev_c = SEVERITY_COLORS.get(iss.severity, C_SLATE)
+            tbl_data.append([
+                Paragraph(f'#{iss.id}', STYLES['FieldValue']),
+                Paragraph(f'<font color="{sev_c.hexval()}">{iss.severity.title()}</font>', STYLES['FieldValue']),
+                Paragraph(f'{iss.area.facility.name} / {iss.area.name}', STYLES['FieldValue']),
+                Paragraph(iss.status.replace('_', ' ').title(), STYLES['FieldValue']),
+                Paragraph(iss.description[:70] + ('…' if len(iss.description) > 70 else ''), STYLES['IssueDesc']),
+            ])
+        iss_tbl = Table(tbl_data, colWidths=[pw * 0.07, pw * 0.12, pw * 0.25, pw * 0.16, pw * 0.40])
+        iss_tbl.setStyle(TableStyle([
+            ('BACKGROUND',    (0, 0), (-1, 0), C_LIGHT),
+            ('FONTNAME',      (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE',      (0, 0), (-1, -1), 7.5),
+            ('INNERGRID',     (0, 0), (-1, -1), 0.25, C_BORDER),
+            ('BOX',           (0, 0), (-1, -1), 0.5, C_BORDER),
+            ('TOPPADDING',    (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
+        ]))
+        story.append(iss_tbl)
+
+    # ── Footer note ───────────────────────────────────────────────────────
+    story.append(Spacer(1, 20))
+    story.append(HRFlowable(width='100%', thickness=0.5, color=C_BORDER))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(
+        'Janitorial QC System — automated scheduled report',
+        STYLES['FooterStyle'],
+    ))
+
+    doc.build(story, onFirstPage=_page_cb, onLaterPages=_page_cb)
+    return buf.getvalue()

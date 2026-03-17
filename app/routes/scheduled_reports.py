@@ -230,6 +230,22 @@ def _send_report(report: ScheduledReport):
         fname     = f'jqc_report_{report.frequency}_{start.strftime("%Y%m%d")}.csv'
         msg.attach(fname, 'text/csv', csv_bytes)
 
+    if report.include_pdf:
+        try:
+            from app.utils.pdf_export import generate_scheduled_report_pdf
+            pdf_bytes = generate_scheduled_report_pdf(
+                report_name   = report.name,
+                frequency     = report.frequency,
+                start         = start,
+                end           = end,
+                facility_name = report.facility.name if report.facility else None,
+                data          = data,
+            )
+            pdf_fname = f'jqc_report_{report.frequency}_{start.strftime("%Y%m%d")}.pdf'
+            msg.attach(pdf_fname, 'application/pdf', pdf_bytes)
+        except Exception as exc:
+            logger.error('SCHEDULED REPORT PDF FAILED | id=%s | error=%s', report.id, exc)
+
     try:
         mail.send(msg)
         logger.info('SCHEDULED REPORT SENT | id=%s | name=%r | recipients=%s',
@@ -338,6 +354,60 @@ def delete(report_id):
     log_action(ACTION_DELETE, 'ScheduledReport', rid, name)
     flash(f'Scheduled report "{name}" deleted.', 'success')
     return redirect(url_for('scheduled_reports.index'))
+
+
+@bp.route('/<int:report_id>/preview')
+@login_required
+@supervisor_required
+def preview(report_id):
+    """Render the scheduled report email in-browser for review."""
+    report     = ScheduledReport.query.get_or_404(report_id)
+    start, end = _date_window(report.frequency)
+    data       = _build_report_data(report, start, end)
+    base_url   = current_app.config.get('APP_BASE_URL', '').rstrip('/')
+
+    current_app.logger.info(
+        'SCHEDULED REPORT PREVIEW | id=%s | name=%r | by=%s',
+        report.id, report.name, current_user.username,
+    )
+
+    return render_template('scheduled_reports/email.html',
+                           base_url=base_url, **data)
+
+
+@bp.route('/<int:report_id>/preview-pdf')
+@login_required
+@supervisor_required
+def preview_pdf(report_id):
+    """Generate and stream the PDF attachment for in-browser review."""
+    from flask import Response
+    from app.utils.pdf_export import generate_scheduled_report_pdf
+
+    report     = ScheduledReport.query.get_or_404(report_id)
+    start, end = _date_window(report.frequency)
+    data       = _build_report_data(report, start, end)
+
+    pdf_bytes = generate_scheduled_report_pdf(
+        report_name   = report.name,
+        frequency     = report.frequency,
+        start         = start,
+        end           = end,
+        facility_name = report.facility.name if report.facility else None,
+        data          = data,
+    )
+
+    filename = f'jqc_report_{report.frequency}_{start.strftime("%Y%m%d")}.pdf'
+
+    current_app.logger.info(
+        'SCHEDULED REPORT PDF PREVIEW | id=%s | name=%r | by=%s',
+        report.id, report.name, current_user.username,
+    )
+
+    return Response(
+        pdf_bytes,
+        mimetype='application/pdf',
+        headers={'Content-Disposition': f'inline; filename="{filename}"'},
+    )
 
 
 @bp.route('/<int:report_id>/send-now', methods=['POST'])

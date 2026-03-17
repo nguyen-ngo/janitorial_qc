@@ -1,87 +1,482 @@
 {% extends "base.html" %}
-{% block title %}Scheduled Reports{% endblock %}
+{% block title %}Dashboard{% endblock %}
+
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h2><i class="bi bi-calendar-check"></i> Scheduled Reports</h2>
-  <a href="{{ url_for('scheduled_reports.create') }}" class="btn btn-primary">
-    <i class="bi bi-plus-circle"></i> New Schedule
-  </a>
+<div class="row mb-3 align-items-center">
+  <div class="col">
+    <h2 class="mb-0">Welcome, {{ current_user.username }}!</h2>
+    <span class="badge bg-{% if current_user.role == 'admin' %}danger{% elif current_user.role == 'supervisor' %}warning{% elif current_user.role == 'project_manager' %}primary{% elif current_user.role == 'customer' %}success{% else %}info{% endif %} mt-1">
+      {{ current_user.role.replace('_',' ')|title }}
+    </span>
+  </div>
 </div>
 
-{% if reports %}
+{# ── Top stat cards ─────────────────────────────────────────────────────── #}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <a href="{{ url_for('inspections.index') }}" class="text-decoration-none">
+    <div class="card text-white bg-primary h-100">
+      <div class="card-body d-flex justify-content-between align-items-center">
+        <div>
+          <div class="small text-white-50 fw-semibold">Today's Inspections</div>
+          <div class="fs-2 fw-bold">{{ today_inspections }}</div>
+        </div>
+        <i class="bi bi-clipboard-data" style="font-size:2.5rem;opacity:.25;"></i>
+      </div>
+    </div>
+    </a>
+  </div>
+  <div class="col-6 col-md-3">
+    <a href="{{ url_for('inspections.index', status='completed') }}" class="text-decoration-none">
+    <div class="card text-white bg-success h-100">
+      <div class="card-body d-flex justify-content-between align-items-center">
+        <div>
+          <div class="small text-white-50 fw-semibold">Completed Today</div>
+          <div class="fs-2 fw-bold">{{ completed_today }}</div>
+        </div>
+        <i class="bi bi-check-circle" style="font-size:2.5rem;opacity:.25;"></i>
+      </div>
+    </div>
+    </a>
+  </div>
+  <div class="col-6 col-md-3">
+    <a href="{{ url_for('issues.index', status='open') }}" class="text-decoration-none">
+    <div class="card text-white bg-warning h-100">
+      <div class="card-body d-flex justify-content-between align-items-center">
+        <div>
+          <div class="small text-white-50 fw-semibold">Open Issues</div>
+          <div class="fs-2 fw-bold">{{ open_issues }}</div>
+        </div>
+        <i class="bi bi-exclamation-triangle" style="font-size:2.5rem;opacity:.25;"></i>
+      </div>
+    </div>
+    </a>
+  </div>
+  <div class="col-6 col-md-3">
+    <a href="{{ url_for('reports.index') }}" class="text-decoration-none">
+    <div class="card text-white bg-info h-100">
+      <div class="card-body d-flex justify-content-between align-items-center">
+        <div>
+          <div class="small text-white-50 fw-semibold">Avg Score (30d)</div>
+          <div class="fs-2 fw-bold">{{ avg_score if avg_score else '--' }}{% if avg_score %}%{% endif %}</div>
+        </div>
+        <i class="bi bi-graph-up" style="font-size:2.5rem;opacity:.25;"></i>
+      </div>
+    </div>
+    </a>
+  </div>
+</div>
+
+{# ── Pending Follow-ups alert (non-customer) ────────────────────────────── #}
+{% if pending_followups and pending_followups > 0 and current_user.role != 'customer' %}
+<div class="row mb-3">
+  <div class="col-12">
+    <a href="{{ url_for('inspections.index', follow_up='1') }}" class="text-decoration-none">
+      <div class="alert alert-warning d-flex align-items-center mb-0 py-2" role="alert">
+        <i class="bi bi-arrow-repeat fs-5 me-2"></i>
+        <strong>{{ pending_followups }}</strong>&nbsp;inspection{{ 's' if pending_followups != 1 else '' }} flagged as requiring a follow-up re-inspection.
+        <span class="ms-2 text-muted small">Click to view →</span>
+      </div>
+    </a>
+  </div>
+</div>
+{% endif %}
+
+{# ── SLA Summary ─────────────────────────────────────────────────────────── #}
+{% if sla_breached > 0 or sla_at_risk > 0 %}
+<div class="row g-3 mb-4">
+  {% if sla_breached > 0 %}
+  <div class="col-6 col-md-3">
+    <a href="{{ url_for('issues.index', sla='breached') }}" class="text-decoration-none">
+      <div class="card border-danger h-100">
+        <div class="card-body d-flex justify-content-between align-items-center">
+          <div>
+            <div class="small text-danger fw-semibold">SLA Breached</div>
+            <div class="fs-2 fw-bold text-danger">{{ sla_breached }}</div>
+          </div>
+          <i class="bi bi-alarm text-danger" style="font-size:2.5rem;opacity:.3;"></i>
+        </div>
+      </div>
+    </a>
+  </div>
+  {% endif %}
+  {% if sla_at_risk > 0 %}
+  <div class="col-6 col-md-3">
+    <a href="{{ url_for('issues.index', sla='at_risk') }}" class="text-decoration-none">
+      <div class="card border-warning h-100">
+        <div class="card-body d-flex justify-content-between align-items-center">
+          <div>
+            <div class="small text-warning fw-semibold">SLA At Risk</div>
+            <div class="fs-2 fw-bold text-warning">{{ sla_at_risk }}</div>
+          </div>
+          <i class="bi bi-alarm text-warning" style="font-size:2.5rem;opacity:.3;"></i>
+        </div>
+      </div>
+    </a>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{# ── Customer portal: scoped facilities panel ───────────────────────────── #}
+{% if current_user.role == 'customer' %}
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header bg-light fw-semibold">
+        <i class="bi bi-building me-1"></i> Your Facilities
+      </div>
+      {% if customer_facilities %}
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Facility</th>
+                <th>Address</th>
+                <th>Project</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for f in customer_facilities %}
+              <tr>
+                <td><strong>{{ f.name }}</strong></td>
+                <td class="text-muted small">{{ f.address or '—' }}</td>
+                <td class="text-muted small">{{ f.project.name if f.project else '—' }}</td>
+                <td>
+                  <a href="{{ url_for('facilities.view_facility', facility_id=f.id) }}"
+                     class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-eye"></i> View
+                  </a>
+                  <a href="{{ url_for('reports.facility_report', facility_id=f.id) }}"
+                     class="btn btn-sm btn-outline-secondary ms-1">
+                    <i class="bi bi-graph-up"></i> Report
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% else %}
+      <div class="card-body text-muted small">
+        <i class="bi bi-info-circle me-1"></i>
+        No facilities have been assigned to your account yet. Please contact your administrator.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ── System quick stats (admin/supervisor) ──────────────────────────────── #}
+{% if current_user.role in ['admin', 'supervisor'] %}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-{% if current_user.role == 'admin' %}4{% else %}6{% endif %}">
+    <div class="card shadow-sm text-center">
+      <div class="card-body py-3">
+        <i class="bi bi-building text-primary" style="font-size:2rem;"></i>
+        <div class="fs-4 fw-bold mt-1">{{ total_facilities }}</div>
+        <div class="text-muted small">Active Facilities</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-{% if current_user.role == 'admin' %}4{% else %}6{% endif %}">
+    <div class="card shadow-sm text-center">
+      <div class="card-body py-3">
+        <i class="bi bi-file-earmark-text text-success" style="font-size:2rem;"></i>
+        <div class="fs-4 fw-bold mt-1">{{ total_templates }}</div>
+        <div class="text-muted small">Templates</div>
+      </div>
+    </div>
+  </div>
+  {% if current_user.role == 'admin' %}
+  <div class="col-6 col-md-4">
+    <div class="card shadow-sm text-center">
+      <div class="card-body py-3">
+        <i class="bi bi-people text-warning" style="font-size:2rem;"></i>
+        <div class="fs-4 fw-bold mt-1">{{ total_users }}</div>
+        <div class="text-muted small">Users</div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{# ── Score trend chart + Facility performance ───────────────────────────── #}
+<div class="row g-3 mb-4">
+  <div class="col-lg-{% if current_user.role in ['admin','supervisor'] and facility_perf %}7{% else %}12{% endif %}">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-light fw-semibold">
+        <i class="bi bi-graph-up me-1"></i>Inspection Score Trend (Last 30 Days)
+      </div>
+      <div class="card-body">
+        {% if trend_labels %}
+        <canvas id="trendChart" height="120"></canvas>
+        {% else %}
+        <div class="text-center text-muted py-4">
+          <i class="bi bi-bar-chart-line fs-2 d-block mb-2"></i>
+          No completed inspections with scores in the last 30 days.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% if current_user.role in ['admin', 'supervisor'] and facility_perf %}
+  <div class="col-lg-5">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-light fw-semibold">
+        <i class="bi bi-building me-1"></i>Facility Performance (30d)
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Facility</th>
+              <th class="text-center">Inspections</th>
+              <th class="text-center">Avg Score</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for f in facility_perf %}
+            <tr>
+              <td class="small">{{ f.name }}</td>
+              <td class="text-center small">{{ f.count }}</td>
+              <td class="text-center">
+                <span class="badge bg-{% if f.avg >= 90 %}success{% elif f.avg >= 70 %}warning{% else %}danger{% endif %}">
+                  {{ f.avg }}%
+                </span>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{# ── Facility Score Trend (30/60/90 days) ─────────────────────────────────── #}
+{% if all_facilities %}
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header bg-light fw-semibold d-flex align-items-center flex-wrap gap-2">
+        <i class="bi bi-graph-up-arrow me-1"></i>Facility Score Trend
+        <div class="ms-auto d-flex align-items-center gap-2" style="font-weight:normal;">
+          <select id="facTrendFacility" class="form-select form-select-sm" style="width:auto;min-width:180px;">
+            <option value="">— Select Facility —</option>
+            {% for f in all_facilities %}
+            <option value="{{ f.id }}">{{ f.name }}</option>
+            {% endfor %}
+          </select>
+          <div class="btn-group btn-group-sm" role="group">
+            <button type="button" class="btn btn-outline-primary active" data-days="30">30d</button>
+            <button type="button" class="btn btn-outline-primary" data-days="60">60d</button>
+            <button type="button" class="btn btn-outline-primary" data-days="90">90d</button>
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="facTrendEmpty" class="text-center text-muted py-4">
+          <i class="bi bi-building fs-2 d-block mb-2 opacity-25"></i>
+          Select a facility to view its score trend.
+        </div>
+        <div id="facTrendLoading" class="text-center text-muted py-4" style="display:none;">
+          <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+          Loading trend data…
+        </div>
+        <canvas id="facTrendChart" height="120" style="display:none;"></canvas>
+        <div id="facTrendNoData" class="text-center text-muted py-4" style="display:none;">
+          <i class="bi bi-bar-chart-line fs-2 d-block mb-2 opacity-25"></i>
+          No completed inspections with scores for this facility in the selected period.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ── Recent activity ─────────────────────────────────────────────────────── #}
 <div class="card shadow-sm">
+  <div class="card-header bg-light fw-semibold">
+    <i class="bi bi-clock-history me-1"></i>Recent Activity
+  </div>
   <div class="card-body p-0">
+    {% if recent_inspections %}
     <div class="table-responsive">
       <table class="table table-hover mb-0">
         <thead class="table-light">
           <tr>
-            <th>Name</th><th>Type</th><th>Frequency</th><th>Facility</th>
-            <th>Recipients</th><th>Next Send</th><th>Last Sent</th>
-            <th>Status</th><th width="160"></th>
+            <th>Date</th>
+            <th>Facility</th>
+            <th>Area</th>
+            {% if current_user.role != 'inspector' %}<th>Inspector</th>{% endif %}
+            <th>Score</th>
+            <th>Status</th>
           </tr>
         </thead>
         <tbody>
-          {% for r in reports %}
-          <tr class="{{ 'text-muted' if not r.active else '' }}">
-            <td><strong>{{ r.name }}</strong></td>
-            <td><span class="badge bg-secondary">{{ r.report_type|title }}</span></td>
-            <td>{{ r.frequency|title }}</td>
-            <td>{{ r.facility.name if r.facility else '— All —' }}</td>
+          {% for insp in recent_inspections %}
+          <tr style="cursor:pointer;" onclick="window.location='{{ url_for('inspections.view', inspection_id=insp.id) }}'">
+            <td><small>{{ insp.inspection_date.strftime('%Y-%m-%d %H:%M') }}</small></td>
+            <td>{{ insp.facility.name }}</td>
+            <td>{{ insp.area.name if insp.area else '—' }}</td>
+            {% if current_user.role != 'inspector' %}<td>{{ insp.inspector.username }}</td>{% endif %}
             <td>
-              <span title="{{ r.recipient_list()|join(', ') }}">
-                {{ r.recipient_list()|length }} recipient{{ 's' if r.recipient_list()|length != 1 else '' }}
+              {% if insp.overall_score %}
+              <span class="badge bg-{% if insp.overall_score >= 90 %}success{% elif insp.overall_score >= 70 %}warning{% else %}danger{% endif %}">
+                {{ insp.overall_score }}%
               </span>
-            </td>
-            <td class="small text-muted">
-              {{ r.next_send_at.strftime('%Y-%m-%d %H:%M') if r.next_send_at else '—' }}
-            </td>
-            <td class="small text-muted">
-              {{ r.last_sent_at.strftime('%Y-%m-%d %H:%M') if r.last_sent_at else 'Never' }}
+              {% else %}
+              <span class="text-muted">—</span>
+              {% endif %}
             </td>
             <td>
-              {% if r.active %}<span class="badge bg-success">Active</span>
-              {% else %}<span class="badge bg-secondary">Paused</span>{% endif %}
-            </td>
-            <td class="text-end">
-              <a href="{{ url_for('scheduled_reports.edit', report_id=r.id) }}"
-                 class="btn btn-sm btn-outline-secondary" title="Edit">
-                <i class="bi bi-pencil"></i>
-              </a>
-              <form method="POST"
-                    action="{{ url_for('scheduled_reports.send_now', report_id=r.id) }}"
-                    class="d-inline">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-sm btn-outline-primary" title="Send Now"
-                        onclick="return confirm('Send this report now?')">
-                  <i class="bi bi-send"></i>
-                </button>
-              </form>
-              <form method="POST"
-                    action="{{ url_for('scheduled_reports.delete', report_id=r.id) }}"
-                    class="d-inline"
-                    onsubmit="return confirm('Delete this scheduled report?')">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
-                  <i class="bi bi-trash3"></i>
-                </button>
-              </form>
+              <span class="badge bg-{% if insp.status == 'completed' %}success{% elif insp.status == 'flagged' %}danger{% else %}secondary{% endif %}">
+                {{ insp.status|title }}
+              </span>
             </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+    {% else %}
+    <div class="text-center py-4 text-muted">
+      <i class="bi bi-inbox fs-2 d-block mb-2"></i>No recent inspections.
+    </div>
+    {% endif %}
   </div>
 </div>
-{% else %}
-<div class="card shadow-sm">
-  <div class="card-body text-center py-5 text-muted">
-    <i class="bi bi-calendar-x fs-1 d-block mb-3 opacity-25"></i>
-    <p class="mb-3">No scheduled reports configured yet.</p>
-    <a href="{{ url_for('scheduled_reports.create') }}" class="btn btn-primary">
-      <i class="bi bi-plus-circle"></i> Create First Schedule
-    </a>
-  </div>
-</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+{% if trend_labels %}
+<script>
+(function () {
+  const ctx    = document.getElementById('trendChart').getContext('2d');
+  const labels = {{ trend_labels | tojson }};
+  const data   = {{ trend_data   | tojson }};
+
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Avg Score (%)',
+        data,
+        borderColor:     '#2563eb',
+        backgroundColor: 'rgba(37,99,235,0.08)',
+        borderWidth: 2,
+        pointRadius: 4,
+        pointBackgroundColor: '#2563eb',
+        tension: 0.3,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ' ' + ctx.parsed.y + '%' } }
+      },
+      scales: {
+        y: { min: 0, max: 100, ticks: { callback: v => v + '%' }, grid: { color: 'rgba(0,0,0,.05)' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+}());
+</script>
+{% endif %}
+
+{# ── Facility trend chart (AJAX-driven) ── #}
+{% if all_facilities %}
+<script>
+(function () {
+  const TREND_URL = '{{ url_for("dashboard.facility_trend") }}';
+  const select    = document.getElementById('facTrendFacility');
+  const dayBtns   = document.querySelectorAll('[data-days]');
+  const elEmpty   = document.getElementById('facTrendEmpty');
+  const elLoading = document.getElementById('facTrendLoading');
+  const elCanvas  = document.getElementById('facTrendChart');
+  const elNoData  = document.getElementById('facTrendNoData');
+
+  let currentDays = 30;
+  let facChart    = null;
+
+  function showState(state) {
+    elEmpty.style.display   = state === 'empty'   ? '' : 'none';
+    elLoading.style.display = state === 'loading' ? '' : 'none';
+    elCanvas.style.display  = state === 'chart'   ? '' : 'none';
+    elNoData.style.display  = state === 'nodata'  ? '' : 'none';
+  }
+
+  async function loadTrend() {
+    const fid = select.value;
+    if (!fid) { showState('empty'); return; }
+
+    showState('loading');
+    try {
+      const r = await fetch(TREND_URL + '?facility_id=' + fid + '&days=' + currentDays);
+      const d = await r.json();
+
+      if (!d.labels || d.labels.length === 0) { showState('nodata'); return; }
+
+      if (facChart) facChart.destroy();
+
+      showState('chart');
+      facChart = new Chart(elCanvas.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: d.labels,
+          datasets: [{
+            label: d.facility + ' — Avg Score (%)',
+            data: d.data,
+            borderColor:     '#0d9488',
+            backgroundColor: 'rgba(13,148,136,0.08)',
+            borderWidth: 2,
+            pointRadius: 4,
+            pointBackgroundColor: '#0d9488',
+            tension: 0.3,
+            fill: true,
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: true, position: 'top', labels: { font: { size: 12 } } },
+            tooltip: { callbacks: { label: ctx => ' ' + ctx.parsed.y + '%' } }
+          },
+          scales: {
+            y: { min: 0, max: 100, ticks: { callback: v => v + '%' }, grid: { color: 'rgba(0,0,0,.05)' } },
+            x: { grid: { display: false } }
+          }
+        }
+      });
+    } catch (err) {
+      console.error('Facility trend fetch error:', err);
+      showState('nodata');
+    }
+  }
+
+  select.addEventListener('change', loadTrend);
+
+  dayBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      dayBtns.forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      currentDays = parseInt(btn.dataset.days);
+      loadTrend();
+    });
+  });
+}());
+</script>
 {% endif %}
 {% endblock %}

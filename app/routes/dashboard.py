@@ -180,6 +180,16 @@ def index():
             for r in perf_rows
         ]
 
+    # ── Facilities list for the trend-by-facility chart selector ────────────
+    if is_privileged or is_project_manager:
+        all_facilities = Facility.query.filter_by(active=True).order_by(Facility.name).all()
+    elif is_customer and customer_facility_ids:
+        all_facilities = Facility.query.filter(
+            Facility.id.in_(customer_facility_ids), Facility.active == True
+        ).order_by(Facility.name).all()
+    else:
+        all_facilities = []
+
     return render_template(
         'dashboard.html',
         today_inspections  = today_inspections,
@@ -197,4 +207,64 @@ def index():
         facility_perf      = facility_perf,
         customer_facilities = customer_facilities,
         pending_followups   = pending_followups,
+        all_facilities      = all_facilities,
     )
+
+
+# ── AJAX: facility score trend ────────────────────────────────────────────────
+
+@bp.route('/facility-trend')
+@login_required
+def facility_trend():
+    """Return daily avg-score data for a single facility over N days.
+
+    Query params:
+        facility_id  (int, required)
+        days         (int, default 30 — allowed: 30, 60, 90)
+
+    Response JSON:
+        { labels: ['2026-03-01', ...], data: [85.2, ...], facility: 'Name' }
+    """
+    from flask import jsonify, request as req
+
+    facility_id = req.args.get('facility_id', type=int)
+    days        = req.args.get('days', 30, type=int)
+    if days not in (30, 60, 90):
+        days = 30
+
+    if not facility_id:
+        return jsonify({'labels': [], 'data': [], 'facility': ''})
+
+    # Scope check for customer users
+    if current_user.role == 'customer':
+        cids = get_customer_scope(current_user) or []
+        if facility_id not in cids:
+            return jsonify({'labels': [], 'data': [], 'facility': ''}), 403
+
+    facility = Facility.query.get(facility_id)
+    if not facility:
+        return jsonify({'labels': [], 'data': [], 'facility': ''})
+
+    start = now_eastern() - timedelta(days=days)
+
+    rows = (
+        db.session.query(
+            func.date(Inspection.inspection_date).label('day'),
+            func.avg(Inspection.overall_score).label('avg'),
+        )
+        .filter(
+            Inspection.facility_id     == facility_id,
+            Inspection.status          == 'completed',
+            Inspection.overall_score.isnot(None),
+            Inspection.inspection_date >= start,
+        )
+        .group_by(func.date(Inspection.inspection_date))
+        .order_by(func.date(Inspection.inspection_date))
+        .all()
+    )
+
+    return jsonify({
+        'labels':   [str(r.day) for r in rows],
+        'data':     [round(float(r.avg), 2) for r in rows],
+        'facility': facility.name,
+    })
