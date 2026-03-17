@@ -108,6 +108,8 @@ def rename_template(template_id):
     template.frequency   = new_frequency
 
     db.session.commit()
+    log_action(ACTION_UPDATE, 'Template', template.id, template.name,
+               f'frequency={template.frequency}; via=rename')
     flash(f'Template "{template.name}" updated successfully.', 'success')
     return redirect(url_for('templates.index'))
 
@@ -258,6 +260,8 @@ def save_form_schema(template_id):
 
     template.form_schema = sanitised
     db.session.commit()
+    log_action(ACTION_UPDATE, 'Template', template.id, template.name,
+               f'form_schema saved; field_count={len(sanitised)}')
 
     return jsonify({'success': True, 'field_count': len(sanitised)})
 

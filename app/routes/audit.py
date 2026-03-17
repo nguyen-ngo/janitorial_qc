@@ -6,6 +6,7 @@ from app.models.audit import AuditLog
 from app.models.user import User
 from app.utils.decorators import admin_required
 from app.utils.audit import log_action, ACTION_DELETE
+from app.utils.time_utils import now_eastern
 
 bp = Blueprint('audit', __name__, url_prefix='/audit')
 
@@ -120,7 +121,7 @@ def purge():
         flash('Invalid purge threshold selected.', 'danger')
         return redirect(url_for('audit.index'))
 
-    cutoff = datetime.utcnow() - timedelta(days=older_than)
+    cutoff = now_eastern() - timedelta(days=older_than)
     deleted = AuditLog.query.filter(AuditLog.created_at < cutoff).delete()
     db.session.flush()
 

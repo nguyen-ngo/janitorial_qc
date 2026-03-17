@@ -43,14 +43,47 @@ def index():
         .all()
     )
 
-    # Pre-compute assignment summary per customer to avoid N+1 in template
-    assignment_map = {}   # user_id → list[CustomerAssignment]
-    scope_map      = {}   # user_id → list[int] facility IDs
+    customer_ids = [c.id for c in customers]
 
+    # ── Single bulk query for all assignments ─────────────────────────────
+    # Replaces per-customer CustomerAssignment.query.filter_by(user_id=...) loop
+    all_assignments = (
+        CustomerAssignment.query
+        .filter(CustomerAssignment.user_id.in_(customer_ids))
+        .all()
+    ) if customer_ids else []
+
+    assignment_map = {c.id: [] for c in customers}
+    for a in all_assignments:
+        assignment_map[a.user_id].append(a)
+
+    # ── Single bulk query for all active facilities in assigned projects ──
+    # Resolves facility scope for every customer without repeated DB round-trips.
+    from collections import defaultdict
+    assigned_project_ids = {a.project_id for a in all_assignments}
+
+    project_facilities_map = defaultdict(list)  # project_id → [facility_id, ...]
+    if assigned_project_ids:
+        proj_facs = (
+            Facility.query
+            .filter(
+                Facility.project_id.in_(assigned_project_ids),
+                Facility.active == True,
+            )
+            .all()
+        )
+        for f in proj_facs:
+            project_facilities_map[f.project_id].append(f.id)
+
+    scope_map = {}   # user_id → sorted list[int] facility IDs
     for customer in customers:
-        assignments = CustomerAssignment.query.filter_by(user_id=customer.id).all()
-        assignment_map[customer.id] = assignments
-        scope_map[customer.id]      = get_customer_scope(customer) or []
+        ids = set()
+        for a in assignment_map[customer.id]:
+            if a.facility_id:
+                ids.add(a.facility_id)
+            else:
+                ids.update(project_facilities_map.get(a.project_id, []))
+        scope_map[customer.id] = sorted(ids)
 
     # All active projects for the assignment modal
     projects = Project.query.filter_by(active=True).order_by(Project.name).all()
@@ -386,8 +419,9 @@ def bulk_import():
                         facility_id = fac_id or None,
                     )
                     db.session.add(assign)
+                    db.session.flush()   # populate assign.id before audit log
                     created_assign += 1
-                    log_action(ACTION_CREATE, 'CustomerAssignment', 0,
+                    log_action(ACTION_CREATE, 'CustomerAssignment', assign.id,
                                f'{uname} → project_id={proj_id}',
                                f'facility_id={fac_id}; source=bulk_import')
                 else:

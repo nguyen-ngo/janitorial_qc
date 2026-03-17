@@ -55,8 +55,7 @@ def _compute_next_send(frequency: str, from_dt: datetime = None) -> datetime:
     if frequency == 'daily':
         return (now + timedelta(days=1)).replace(hour=7, minute=0, second=0, microsecond=0)
     if frequency == 'weekly':
-        days_ahead = 7 - now.weekday()   # next Monday
-        return (now + timedelta(days=days_ahead)).replace(hour=7, minute=0, second=0, microsecond=0)
+        return (now + timedelta(weeks=1)).replace(hour=7, minute=0, second=0, microsecond=0)
     # monthly: first of next month
     if now.month == 12:
         return now.replace(year=now.year + 1, month=1, day=1, hour=7, minute=0, second=0, microsecond=0)

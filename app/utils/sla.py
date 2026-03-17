@@ -112,7 +112,7 @@ def send_sla_alerts():
     logger = logging.getLogger(__name__)
 
     open_issues = Issue.query.filter(
-        Issue.status.in_(['open', 'in_progress'])
+        Issue.status.in_(['open', 'in_progress', 'pending_verification'])
     ).all()
 
     admins = User.query.filter_by(role='admin').all()
