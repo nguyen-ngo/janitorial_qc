@@ -312,6 +312,42 @@ def execute(inspection_id):
         except (json.JSONDecodeError, TypeError):
             pass
 
+    # ── Pre-fill from parent inspection for re-inspections ────────────────
+    # When a re-inspection is first opened (no saved responses yet) and has
+    # a completed parent, carry forward all input values EXCEPT scoring
+    # fields (rating, pass_fail) so the inspector doesn't re-enter static
+    # data but must re-evaluate every scoreable item fresh.
+    if not saved_responses and inspection.parent_inspection_id:
+        parent = Inspection.query.get(inspection.parent_inspection_id)
+        if parent and parent.notes:
+            try:
+                parent_parsed = json.loads(parent.notes)
+                if isinstance(parent_parsed, dict) and '_form_data' in parent_parsed:
+                    parent_data = parent_parsed['_form_data']
+                    # Build a set of field IDs whose type should NOT be carried over
+                    # - rating / pass_fail: inspector must re-evaluate fresh
+                    # - image / signature: parent photos belong to the original inspection
+                    exclude_types = {'rating', 'pass_fail', 'image', 'signature'}
+                    exclude_ids = set()
+                    for f in form_fields:
+                        if f.get('type') in exclude_types:
+                            exclude_ids.add(str(f.get('id', '')))
+                    saved_responses = {
+                        k: v for k, v in parent_data.items()
+                        if str(k) not in exclude_ids
+                    }
+                    # Persist as draft so the pre-filled data survives page reloads
+                    _save_responses(inspection, saved_responses)
+                    db.session.commit()
+                    current_app.logger.info(
+                        'RE-INSPECTION PREFILL | inspection_id=%s | parent_id=%s | '
+                        'fields_copied=%s | fields_excluded=%s',
+                        inspection.id, parent.id,
+                        len(saved_responses), len(exclude_ids),
+                    )
+            except (json.JSONDecodeError, TypeError):
+                pass
+
     if request.method == 'POST':
         action = request.form.get('action', 'submit')
         responses = _collect_form_responses(form_fields, saved_responses)
