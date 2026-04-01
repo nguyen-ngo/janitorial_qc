@@ -101,7 +101,7 @@ class FacilityForm(FlaskForm):
 class AreaForm(FlaskForm):
     name      = StringField('Area Name', validators=[DataRequired(), Length(max=255)])
     area_type = SelectField('Area Type', choices=[
-        ('restroom','Restroom'), ('lobby','Lobby'), ('hallway','Hallway'),
+        ('building','Building'), ('restroom','Restroom'), ('lobby','Lobby'), ('hallway','Hallway'),
         ('office','Office'), ('kitchen','Kitchen'), ('storage','Storage'),
         ('outdoor','Outdoor'), ('other','Other'),
     ], validators=[Optional()])
