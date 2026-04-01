@@ -249,8 +249,8 @@ def add_assignment(customer_id):
 def remove_assignment(assignment_id):
     assignment  = CustomerAssignment.query.get_or_404(assignment_id)
     customer_id = assignment.user_id
-    customer    = User.query.get(customer_id)
-    project     = Project.query.get(assignment.project_id)
+    customer    = db.session.get(User, customer_id)
+    project     = db.session.get(Project, assignment.project_id)
 
     username     = customer.username if customer else f'user_id={customer_id}'
     project_name = project.name if project else f'project_id={assignment.project_id}'

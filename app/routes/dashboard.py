@@ -241,7 +241,7 @@ def facility_trend():
         if facility_id not in cids:
             return jsonify({'labels': [], 'data': [], 'facility': ''}), 403
 
-    facility = Facility.query.get(facility_id)
+    facility = db.session.get(Facility, facility_id)
     if not facility:
         return jsonify({'labels': [], 'data': [], 'facility': ''})
 

@@ -34,6 +34,7 @@ from flask import request, g, abort
 
 from app.api.jwt_utils import decode_access_token
 from app.api.errors import api_error
+from app import db
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -62,7 +63,7 @@ def jwt_required(f):
             return api_error('Access token is invalid or expired', 401)
 
         user_id = int(payload.get('sub', 0))
-        user    = User.query.get(user_id)
+        user    = db.session.get(User, user_id)
 
         if user is None:
             return api_error('User not found', 401)

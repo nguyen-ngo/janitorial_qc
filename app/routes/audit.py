@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
+from app import db
 from app.models.audit import AuditLog
 from app.models.user import User
 from app.utils.decorators import admin_required
@@ -55,13 +56,13 @@ def index():
 
     # Distinct action and entity_type values for the filter dropdowns
     distinct_actions = (
-        db.session.query(AuditLog.action)
+        AuditLog.query.with_entities(AuditLog.action)
         .distinct()
         .order_by(AuditLog.action)
         .all()
     )
     distinct_entity_types = (
-        db.session.query(AuditLog.entity_type)
+        AuditLog.query.with_entities(AuditLog.entity_type)
         .distinct()
         .order_by(AuditLog.entity_type)
         .all()
@@ -145,7 +146,3 @@ def purge():
         'success' if deleted else 'info',
     )
     return redirect(url_for('audit.index'))
-
-
-# Avoid circular import — imported after function definitions
-from app import db  # noqa: E402

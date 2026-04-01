@@ -318,7 +318,7 @@ def execute(inspection_id):
     # fields (rating, pass_fail) so the inspector doesn't re-enter static
     # data but must re-evaluate every scoreable item fresh.
     if not saved_responses and inspection.parent_inspection_id:
-        parent = Inspection.query.get(inspection.parent_inspection_id)
+        parent = db.session.get(Inspection, inspection.parent_inspection_id)
         if parent and parent.notes:
             try:
                 parent_parsed = json.loads(parent.notes)
@@ -717,7 +717,7 @@ def flag_issue(inspection_id):
         )
 
         if issue.assigned_to:
-            assignee = User.query.get(issue.assigned_to)
+            assignee = db.session.get(User, issue.assigned_to)
             if assignee and assignee.id != current_user.id:
                 notify(
                     recipient     = assignee,

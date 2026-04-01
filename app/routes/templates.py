@@ -305,6 +305,9 @@ def create_checklist_item(template_id):
         )
         db.session.add(item)
         db.session.commit()
+        log_action(ACTION_CREATE, 'ChecklistItem', item.id, item.item_description[:80],
+                   f'template_id={template.id}; category={item.category or ""}; '
+                   f'scoring_type={item.scoring_type}')
 
         flash('Checklist item added successfully.', 'success')
         return redirect(url_for('templates.edit_template', template_id=template.id))
@@ -331,6 +334,9 @@ def edit_checklist_item(item_id):
         item.weight = form.weight.data
         item.requires_photo = form.requires_photo.data
         db.session.commit()
+        log_action(ACTION_UPDATE, 'ChecklistItem', item.id, item.item_description[:80],
+                   f'template_id={item.template_id}; category={item.category or ""}; '
+                   f'scoring_type={item.scoring_type}')
         flash('Checklist item updated successfully.', 'success')
         return redirect(url_for('templates.edit_template', template_id=item.template_id))
 
@@ -349,8 +355,12 @@ def edit_checklist_item(item_id):
 def delete_checklist_item(item_id):
     item = ChecklistItem.query.get_or_404(item_id)
     template_id = item.template_id
+    item_desc   = item.item_description[:80]
+    item_id_snap = item.id
     db.session.delete(item)
     db.session.commit()
+    log_action(ACTION_DELETE, 'ChecklistItem', item_id_snap, item_desc,
+               f'template_id={template_id}')
     flash('Checklist item deleted successfully.', 'success')
     return redirect(url_for('templates.edit_template', template_id=template_id))
 
@@ -363,7 +373,7 @@ def reorder_items(template_id):
     item_order = request.json.get('item_order', [])
 
     for index, item_id in enumerate(item_order):
-        item = ChecklistItem.query.get(item_id)
+        item = db.session.get(ChecklistItem, item_id)
         if item and item.template_id == template.id:
             item.display_order = index
 

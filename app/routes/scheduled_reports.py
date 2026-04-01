@@ -32,7 +32,7 @@ from flask_login import login_required, current_user
 from flask_mail import Message
 from sqlalchemy import func
 
-from app import db, mail
+from app import db, mail, csrf
 from app.models.scheduled_report import ScheduledReport
 from app.models.inspection import Inspection, InspectionTemplate
 from app.models.facility import Facility, Area
@@ -419,6 +419,9 @@ def send_now(report_id):
     if ok:
         report.last_sent_at = now_eastern()
         db.session.commit()
+        log_action(ACTION_UPDATE, 'ScheduledReport', report.id, report.name,
+                   f'manual send_now by {current_user.username}; '
+                   f'frequency={report.frequency}; recipients={len(report.recipient_list())}')
         flash(f'Report "{report.name}" sent successfully.', 'success')
     else:
         flash(f'Failed to send report "{report.name}". Check application logs.', 'danger')
@@ -428,6 +431,7 @@ def send_now(report_id):
 # ── Cron endpoint ─────────────────────────────────────────────────────────────
 
 @bp.route('/send', methods=['POST'])
+@csrf.exempt
 def send():
     """Token-protected endpoint called by cron to dispatch due reports.
 
@@ -452,12 +456,20 @@ def send():
     sent, failed = 0, 0
     for report in due:
         ok = _send_report(report)
+        # Always advance next_send_at so a failed report does not get
+        # retried on every subsequent cron run.  last_sent_at is only
+        # updated on a successful delivery so the UI accurately reflects
+        # when the last good email was dispatched.
+        report.next_send_at = _compute_next_send(frequency, now)
         if ok:
             report.last_sent_at = now
-            report.next_send_at = _compute_next_send(frequency, now)
             sent += 1
         else:
             failed += 1
+            logger.error(
+                'SCHEDULED REPORT FAILED | id=%s | name=%r | frequency=%s',
+                report.id, report.name, frequency,
+            )
     db.session.commit()
 
     logger.info('SCHEDULED REPORTS CRON | frequency=%s | due=%s | sent=%s | failed=%s',

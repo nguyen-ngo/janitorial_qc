@@ -3,7 +3,7 @@ import logging
 from flask import (Blueprint, jsonify, request, abort,
                    render_template, redirect, url_for, flash, current_app)
 from flask_login import login_required, current_user
-from app import db
+from app import db, csrf
 from app.models.notification import (
     Notification, NotificationPreference, ALL_EVENT_TYPES
 )
@@ -166,6 +166,7 @@ def preferences():
 # ── Digest trigger (called by cron) ───────────────────────────────────────────
 
 @bp.route('/send-digest', methods=['POST'])
+@csrf.exempt
 def send_digest():
     """Trigger digest email delivery. Protected by a shared secret token.
 
@@ -198,6 +199,7 @@ def send_digest():
 # ── SLA alert trigger (called by cron) ────────────────────────────────────────
 
 @bp.route('/check-sla', methods=['POST'])
+@csrf.exempt
 def check_sla():
     """Scan all open issues for SLA breaches and dispatch alerts.
 

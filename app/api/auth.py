@@ -170,7 +170,7 @@ def refresh():
                        request.remote_addr)
         return api_error('Refresh token is invalid or expired', 401)
 
-    user = User.query.get(rt_row.user_id)
+    user = db.session.get(User, rt_row.user_id)
     if user is None or not user.active:
         rt_row.revoke()
         db.session.commit()

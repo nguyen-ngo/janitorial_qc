@@ -181,7 +181,7 @@ def add_assignment(project_id):
         db.session.add(assignment)
         db.session.commit()
 
-        user = User.query.get(form.user_id.data)
+        user = db.session.get(User, form.user_id.data)
         scope_label = f'facility_id={facility_id}' if facility_id else 'all facilities'
         logger.info('PROJECTS | assignment_add | admin=%s customer=%s project_id=%s scope=%s',
                     current_user.username, user.username, project_id, scope_label)
@@ -208,7 +208,7 @@ def remove_assignment(assignment_id):
     assignment = CustomerAssignment.query.get_or_404(assignment_id)
     project_id = assignment.project_id
     project = Project.query.get_or_404(project_id)
-    user = User.query.get(assignment.user_id)
+    user = db.session.get(User, assignment.user_id)
 
     username = user.username if user else f'user_id={assignment.user_id}'
     assignment_id_snap = assignment.id

@@ -107,7 +107,7 @@ def view(issue_id):
     if current_user.role == 'customer':
         from app.models.facility import Area
         cids = get_customer_scope(current_user) or []
-        area = Area.query.get(issue.area_id)
+        area = db.session.get(Area, issue.area_id)
         if not area or area.facility_id not in cids:
             flash('Access denied.', 'danger')
             return redirect(url_for('issues.index'))
@@ -167,7 +167,7 @@ def view(issue_id):
 
         # 1. Status changed — notify assignee
         if old_status != issue.status and new_assigned_to:
-            assignee = User.query.get(new_assigned_to)
+            assignee = db.session.get(User, new_assigned_to)
             if assignee and assignee.id != actor_id:
                 notify(
                     recipient  = assignee,
@@ -186,7 +186,7 @@ def view(issue_id):
 
         # 2. Reassigned — notify new assignee
         if (old_assigned_to != new_assigned_to) and new_assigned_to:
-            new_assignee = User.query.get(new_assigned_to)
+            new_assignee = db.session.get(User, new_assigned_to)
             if new_assignee and new_assignee.id != actor_id:
                 notify(
                     recipient  = new_assignee,
@@ -204,7 +204,7 @@ def view(issue_id):
 
         # 3. Unassigned — notify previous assignee
         if old_assigned_to and old_assigned_to != new_assigned_to:
-            old_assignee = User.query.get(old_assigned_to)
+            old_assignee = db.session.get(User, old_assigned_to)
             if old_assignee and old_assignee.id != actor_id:
                 notify(
                     recipient  = old_assignee,
@@ -221,7 +221,7 @@ def view(issue_id):
 
         # 4. Comment added — notify assignee
         if comment_body and new_assigned_to:
-            commentee = User.query.get(new_assigned_to)
+            commentee = db.session.get(User, new_assigned_to)
             if commentee and commentee.id != actor_id:
                 notify(
                     recipient  = commentee,
@@ -250,7 +250,8 @@ def view(issue_id):
                 f'to "{issue.status.replace("_"," ").title()}"'
             )
         if old_assigned_to != new_assigned_to:
-            new_name = User.query.get(new_assigned_to).username if new_assigned_to else 'Unassigned'
+            _new_assignee_obj = db.session.get(User, new_assigned_to) if new_assigned_to else None
+            new_name = _new_assignee_obj.username if _new_assignee_obj else 'Unassigned'
             changes.append(f'reassigned to {new_name}')
         if comment_body:
             changes.append(f'new comment added by {current_user.username}')
@@ -378,7 +379,7 @@ def create():
                    f'severity={issue.severity}; assigned_to={issue.assigned_to}')
 
         if issue.assigned_to:
-            assignee = User.query.get(issue.assigned_to)
+            assignee = db.session.get(User, issue.assigned_to)
             if assignee and assignee.id != current_user.id:
                 notify(
                     recipient  = assignee,
@@ -397,7 +398,7 @@ def create():
                 db.session.commit()
 
         # ── Notify customer portal users for this facility ──────────
-        area = Area.query.get(issue.area_id)
+        area = db.session.get(Area, issue.area_id)
         if area:
             notify_customers_for_facility(
                 facility_id = area.facility_id,
