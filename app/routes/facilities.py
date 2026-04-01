@@ -166,7 +166,16 @@ def delete_area(area_id):
     if area.inspections.count() > 0:
         flash('Cannot delete area with existing inspections.', 'danger')
         return redirect(url_for('facilities.view_facility', facility_id=facility_id))
-    
+
+    issue_count = area.issues.count()
+    if issue_count > 0:
+        flash(
+            f'Cannot delete area "{area.name}" — it has {issue_count} issue record(s) on file. '
+            f'Resolve or reassign those issues first.',
+            'danger'
+        )
+        return redirect(url_for('facilities.view_facility', facility_id=facility_id))
+
     area_name = area.name
     area_id_snap = area.id
     db.session.delete(area)

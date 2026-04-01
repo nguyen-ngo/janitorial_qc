@@ -220,9 +220,54 @@
   </div>
 </div>
 
-<a href="{{ url_for('issues.index') }}" class="btn btn-outline-secondary btn-sm">
-  <i class="bi bi-arrow-left"></i> Back to Issues
-</a>
+<div class="d-flex align-items-center gap-2 mt-2">
+  <a href="{{ url_for('issues.index') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left"></i> Back to Issues
+  </a>
+  {% if current_user.role in ['admin', 'supervisor'] %}
+  <button type="button" class="btn btn-outline-danger btn-sm"
+          data-bs-toggle="modal" data-bs-target="#deleteIssueModal">
+    <i class="bi bi-trash"></i> Delete Issue
+  </button>
+  {% endif %}
+</div>
+
+{% if current_user.role in ['admin', 'supervisor'] %}
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteIssueModal" tabindex="-1" aria-labelledby="deleteIssueModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title" id="deleteIssueModalLabel">
+          <i class="bi bi-exclamation-triangle-fill"></i> Confirm Deletion
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>You are about to permanently delete:</p>
+        <p class="fw-bold">Issue #{{ issue.id }} — {{ issue.severity|title }} severity in {{ issue.area.name }}</p>
+        <div class="alert alert-warning mb-0">
+          <i class="bi bi-exclamation-triangle-fill"></i>
+          This action is <strong>irreversible</strong>. All comments, photos, and
+          follower records associated with this issue will also be deleted.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          <i class="bi bi-x-circle"></i> Cancel
+        </button>
+        <form method="POST" action="{{ url_for('issues.delete', issue_id=issue.id) }}" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-danger">
+            <i class="bi bi-trash-fill"></i> Delete Permanently
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% block extra_js %}
 <script>
 (function () {

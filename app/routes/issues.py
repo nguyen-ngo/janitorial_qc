@@ -1,3 +1,4 @@
+import os
 from app.utils.time_utils import now_eastern
 from flask import (Blueprint, render_template, redirect, url_for,
                    flash, request, current_app, jsonify)
@@ -550,3 +551,54 @@ def verification_queue():
         sla_status    = sla_status,
         sla_hours_remaining = sla_hours_remaining,
     )
+
+# ── Delete ────────────────────────────────────────────────────────────────────
+
+@bp.route('/<int:issue_id>/delete', methods=['POST'])
+@login_required
+@supervisor_required
+def delete(issue_id):
+    """Permanently delete an issue and its associated photos.
+
+    Restricted to admin and supervisor roles.  The deletion is recorded in
+    the audit log before the record is removed so there is always a trace.
+    """
+    issue = Issue.query.get_or_404(issue_id)
+
+    # Snapshot fields needed for logging before deletion
+    issue_id_snap    = issue.id
+    issue_desc       = issue.description[:80]
+    area_name        = issue.area.name if issue.area else f'area_id={issue.area_id}'
+    facility_name    = issue.area.facility.name if issue.area else '—'
+    severity         = issue.severity
+
+    # Collect photo paths to clean up from disk after DB delete
+    photo_paths = []
+    if issue.photo_path:
+        photo_paths.append(issue.photo_path)
+    if issue.result_photos:
+        photo_paths.extend(issue.result_photos)
+
+    db.session.delete(issue)
+    db.session.commit()
+
+    # Remove orphaned photo files — best-effort, never block on failure
+    static_folder = current_app.root_path
+    for rel_path in photo_paths:
+        abs_path = os.path.normpath(os.path.join(static_folder, 'static', rel_path))
+        try:
+            if os.path.isfile(abs_path):
+                os.remove(abs_path)
+        except OSError:
+            pass
+
+    current_app.logger.info(
+        'ISSUE DELETED | id=%s | severity=%s | area=%s | facility=%s | deleted_by=%s',
+        issue_id_snap, severity, area_name, facility_name, current_user.username,
+    )
+    log_action(ACTION_DELETE, 'Issue', issue_id_snap,
+               f'#{issue_id_snap} {severity} in {area_name}',
+               f'facility={facility_name}; description={issue_desc}')
+
+    flash(f'Issue #{issue_id_snap} has been permanently deleted.', 'success')
+    return redirect(url_for('issues.index'))

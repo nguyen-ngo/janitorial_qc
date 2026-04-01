@@ -59,7 +59,7 @@
                 <form method="POST"
                       action="{{ url_for('templates.duplicate_template', template_id=template.id) }}"
                       class="d-inline">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-sm btn-outline-secondary"
                             title="Duplicate template">
                         <i class="bi bi-copy"></i> Duplicate
@@ -103,7 +103,7 @@
             </div>
             <form id="renameTemplateForm" method="POST" action="">
                 <div class="modal-body">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                     <div class="mb-3">
                         <label for="renameInput" class="form-label fw-semibold">Name <span class="text-danger">*</span></label>
@@ -177,7 +177,7 @@
                     <i class="bi bi-x-circle"></i> Cancel
                 </button>
                 <form id="deleteTemplateForm" method="POST" action="" class="d-inline">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" id="confirmDeleteBtn" class="btn btn-danger">
                         <i class="bi bi-trash-fill"></i> Delete Permanently
                     </button>

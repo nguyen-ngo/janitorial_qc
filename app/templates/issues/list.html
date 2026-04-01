@@ -106,6 +106,17 @@
                   <i class="bi bi-eye"></i> View
                 {% endif %}
               </a>
+              {% if current_user.role in ['admin', 'supervisor'] %}
+              <form method="POST" action="{{ url_for('issues.delete', issue_id=issue.id) }}"
+                    class="d-inline"
+                    onsubmit="return confirm('Permanently delete Issue #{{ issue.id }}? This cannot be undone.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-sm btn-outline-danger"
+                        title="Delete Issue #{{ issue.id }}">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+              {% endif %}
             </td>
           </tr>
           {% endfor %}

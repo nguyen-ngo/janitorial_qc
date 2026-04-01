@@ -130,9 +130,16 @@
                             <a href="{{ url_for('facilities.edit_area', area_id=area.id) }}" class="btn btn-sm btn-outline-primary">
                                 <i class="bi bi-pencil"></i>
                             </a>
-                            <form method="POST" action="{{ url_for('facilities.delete_area', area_id=area.id) }}" class="d-inline" onsubmit="return confirm('Delete this area?');">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                            {% set area_issue_count = area.issues.count() %}
+                            {% set area_insp_count = area.inspections.count() %}
+                            <form method="POST" action="{{ url_for('facilities.delete_area', area_id=area.id) }}" class="d-inline"
+                                  onsubmit="return confirm('Delete area '{{ area.name }}'? This cannot be undone.');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger"
+                                        {% if area_insp_count > 0 or area_issue_count > 0 %}
+                                        disabled
+                                        title="Cannot delete — {{ area_insp_count }} inspection(s) and {{ area_issue_count }} issue(s) on file"
+                                        {% endif %}>
                                     <i class="bi bi-trash"></i>
                                 </button>
                             </form>
@@ -185,7 +192,7 @@
                     <i class="bi bi-x-circle"></i> Cancel
                 </button>
                 <form method="POST" action="{{ url_for('facilities.delete_facility', facility_id=facility.id) }}" class="d-inline">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit"
                             class="btn btn-danger"
                             {% if facility.inspections.count() > 0 %}disabled{% endif %}>
