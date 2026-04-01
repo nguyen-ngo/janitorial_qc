@@ -118,6 +118,218 @@
   .tbl-view { width:100%; border-collapse:collapse; font-size:.76rem; }
   .tbl-view th { background:#f1f5f9; font-weight:600; color:#374151; padding:.2rem .4rem; border:1px solid #e2e8f0; }
   .tbl-view td { border:1px solid #e2e8f0; padding:.15rem .4rem; color:#0f172a; }
+  /* ── Print styles ── */
+  @media print {
+
+    /* ── 1. Hide all screen-only chrome ── */
+    nav, .navbar, header,
+    .d-flex.justify-content-between.align-items-center.mb-3,
+    .alert-warning,
+    .modal, .modal-backdrop,
+    .media-backdrop,
+    a.btn, button,
+    .btn                          { display: none !important; }
+
+    /* ── 2. Page / body reset ── */
+    html, body                    { background: #fff !important;
+                                    font-family: Helvetica, Arial, sans-serif;
+                                    font-size: 9pt; color: #1a1d23; }
+    .insp-wrap                    { max-width: 100% !important;
+                                    padding: 0 !important; margin: 0 !important; }
+    @page                         { margin: 0.65in; size: letter; }
+
+    /* ── 3. Dark header band  (matches PDF header) ── */
+    .insp-header                  { background: #1a1d23 !important;
+                                    color: #fff !important;
+                                    border-radius: 0 !important;
+                                    padding: 10pt 14pt !important;
+                                    display: flex !important;
+                                    justify-content: space-between;
+                                    align-items: center;
+                                    page-break-after: avoid;
+                                    -webkit-print-color-adjust: exact;
+                                    print-color-adjust: exact; }
+    .insp-header h4               { font-size: 12pt !important;
+                                    color: #fff !important; margin: 0; }
+    .insp-header .sub             { font-size: 8pt !important;
+                                    color: #94a3b8 !important; }
+    /* Score badge in header */
+    .score-badge                  { font-size: 13pt !important;
+                                    font-weight: 700;
+                                    padding: 4pt 10pt !important;
+                                    border-radius: 6pt !important;
+                                    -webkit-print-color-adjust: exact;
+                                    print-color-adjust: exact; }
+
+    /* ── 4. Body panel ── */
+    .insp-body                    { border: 1pt solid #e2e8f0 !important;
+                                    border-top: none !important;
+                                    border-radius: 0 !important;
+                                    box-shadow: none !important;
+                                    padding: 12pt !important; }
+
+    /* ── 5. Meta row — render as a bordered grid (matches PDF _meta_table) ── */
+    .meta-row                     { display: grid !important;
+                                    grid-template-columns: repeat(3, 1fr);
+                                    gap: 0 !important;
+                                    border: 0.5pt solid #e2e8f0;
+                                    background: #f1f5f9 !important;
+                                    margin-bottom: 10pt !important;
+                                    -webkit-print-color-adjust: exact;
+                                    print-color-adjust: exact; }
+    .meta-item                    { padding: 4pt 6pt !important;
+                                    border: 0.25pt solid #e2e8f0 !important;
+                                    background: #f1f5f9 !important; }
+    .meta-item .lbl               { font-size: 7pt !important;
+                                    color: #64748b !important;
+                                    font-weight: 600;
+                                    text-transform: uppercase;
+                                    letter-spacing: 0.03em;
+                                    display: block; }
+    .meta-item .val               { font-size: 9pt !important;
+                                    color: #1a1d23 !important;
+                                    font-weight: 700;
+                                    display: block; margin-top: 1pt; }
+
+    /* ── 6. Score / status comparison alerts (parent/child links) ── */
+    .alert-info, .alert-secondary { display: block !important;
+                                    font-size: 7.5pt;
+                                    border: 0.5pt solid #e2e8f0 !important;
+                                    padding: 4pt 8pt !important;
+                                    margin-bottom: 6pt !important;
+                                    background: #f8fafc !important;
+                                    border-radius: 0 !important; }
+
+    /* ── 7. Section headings (matches PDF SectionHead + HR rule) ── */
+    .section-head                 { background: none !important;
+                                    border-bottom: 1.5pt solid #e2e8f0 !important;
+                                    padding: 0 0 2pt 0 !important;
+                                    margin: 10pt 0 4pt 0 !important;
+                                    page-break-after: avoid; }
+    .section-head strong          { font-size: 9.5pt !important;
+                                    font-weight: 700 !important;
+                                    color: #1a1d23 !important; }
+
+    /* ── 8. Form grid — keep CSS grid, scale columns to page width ──
+       Letter page at 0.65in margins → ~7.7in usable.
+       12 equal columns: each unit = 7.7in / 12 ≈ 0.642in.
+       We replicate the iPad fluid override pattern but for print. ── */
+    .form-grid                    { display: grid !important;
+                                    --_cell: calc((100% - 11 * 6pt) / 12);
+                                    grid-template-columns: repeat(12, var(--_cell)) !important;
+                                    grid-auto-rows: minmax(28pt, auto) !important;
+                                    gap: 3pt 6pt !important;
+                                    width: 100% !important; }
+    .fg-cell                      { overflow: visible !important;
+                                    display: flex !important;
+                                    flex-direction: column !important;
+                                    padding: 2pt 3pt !important;
+                                    min-height: 0 !important; }
+
+    /* Field label (matches PDF FieldLabel: 7.5pt, slate) */
+    .fg-cell .field-lbl           { font-size: 7pt !important;
+                                    color: #64748b !important;
+                                    font-weight: 600;
+                                    display: block !important;
+                                    white-space: nowrap !important;
+                                    overflow: hidden !important;
+                                    text-overflow: ellipsis !important;
+                                    flex-shrink: 0;
+                                    margin-bottom: 1pt; }
+
+    /* Field value box (matches PDF: light border + #f8fafc bg) */
+    .fg-cell .field-val           { font-size: 8pt !important;
+                                    color: #1a1d23 !important;
+                                    background: #f8fafc !important;
+                                    border: 0.5pt solid #e2e8f0 !important;
+                                    border-radius: 2pt !important;
+                                    padding: 2pt 4pt !important;
+                                    display: flex !important;
+                                    align-items: center !important;
+                                    white-space: nowrap !important;
+                                    overflow: hidden !important;
+                                    text-overflow: ellipsis !important;
+                                    flex: 1 !important;
+                                    min-height: 0 !important;
+                                    -webkit-print-color-adjust: exact;
+                                    print-color-adjust: exact; }
+    .fg-cell .field-val.multiline { white-space: pre-wrap !important;
+                                    overflow: auto !important; }
+    .fg-cell .field-val.empty     { color: #94a3b8 !important;
+                                    font-style: italic; }
+
+    /* Rating stars */
+    .rating-stars-ro              { font-size: 9pt !important;
+                                    color: #f59e0b !important;
+                                    -webkit-print-color-adjust: exact;
+                                    print-color-adjust: exact; }
+    .rating-line                  { display: flex !important;
+                                    align-items: center;
+                                    gap: 4pt; }
+    .rating-score                 { font-size: 7pt !important;
+                                    color: #64748b !important; }
+
+    /* Images: show inline, constrained */
+    .fg-cell img                  { max-width: 2.8in !important;
+                                    max-height: 1.8in !important;
+                                    object-fit: contain;
+                                    display: block;
+                                    margin-top: 3pt; }
+
+    /* Photo/signature view buttons — replace with static label */
+    .btn-view-media               { display: none !important; }
+
+    /* ── 9. Issues table (matches PDF dark header, alternating rows) ── */
+    .tbl-view                     { width: 100%; border-collapse: collapse;
+                                    font-size: 7.5pt; margin-top: 4pt; }
+    .tbl-view thead th            { background: #1a1d23 !important;
+                                    color: #fff !important;
+                                    font-weight: 700;
+                                    padding: 3pt 5pt !important;
+                                    border: 0.25pt solid #e2e8f0 !important;
+                                    -webkit-print-color-adjust: exact;
+                                    print-color-adjust: exact; }
+    .tbl-view tbody tr:nth-child(even) td
+                                  { background: #f1f5f9 !important;
+                                    -webkit-print-color-adjust: exact;
+                                    print-color-adjust: exact; }
+    .tbl-view td                  { padding: 3pt 5pt !important;
+                                    border: 0.25pt solid #e2e8f0 !important;
+                                    vertical-align: top; }
+    /* Severity badge colours in issues table */
+    .badge.bg-danger              { color: #dc2626 !important;
+                                    background: none !important;
+                                    font-weight: 700; }
+    .badge.bg-warning             { color: #d97706 !important;
+                                    background: none !important;
+                                    font-weight: 700; }
+    .badge.bg-secondary           { color: #64748b !important;
+                                    background: none !important; }
+    .badge.bg-success             { color: #16a34a !important;
+                                    background: none !important;
+                                    font-weight: 700; }
+
+    /* ── 10. Notes block (matches PDF #fffbeb background) ── */
+    [style*="white-space:pre-wrap"]
+                                  { white-space: pre-wrap !important;
+                                    background: #fffbeb !important;
+                                    border: 0.5pt solid #e2e8f0 !important;
+                                    padding: 5pt 7pt !important;
+                                    font-size: 8.5pt !important;
+                                    -webkit-print-color-adjust: exact;
+                                    print-color-adjust: exact; }
+
+    /* ── 11. Print sign-off block ── */
+    .print-signoff                { display: block !important;
+                                    margin-top: 24pt;
+                                    page-break-inside: avoid; }
+
+    /* ── 12. Page-break hints ── */
+    .insp-header                  { page-break-after: avoid; }
+    .section-head                 { page-break-after: avoid; }
+    hr                            { border-color: #e2e8f0 !important; }
+  }
+
 </style>
 {% endblock %}
 
@@ -544,6 +756,50 @@
 
   </div>
 </div>
+
+{# ── Print-only sign-off block (hidden on screen, visible @media print) ── #}
+<div class="print-signoff" style="display:none; font-family:Helvetica,Arial,sans-serif;">
+
+  <table style="width:100%; border-collapse:collapse; font-size:8pt; color:#64748b;
+                margin-top:10pt;">
+    <tr>
+      <td colspan="6" style="font-size:9.5pt; font-weight:700; color:#1a1d23;
+                              padding-bottom:6pt; border-bottom:0.5pt solid #e2e8f0;">
+        Sign-off
+      </td>
+    </tr>
+    <tr><td colspan="6" style="height:18pt;"></td></tr>
+
+    {# Inspector row #}
+    <tr>
+      <td style="width:18%; border-top:0.75pt solid #1a1d23; padding-top:3pt;
+                 font-size:7.5pt; color:#64748b;">Inspector Signature</td>
+      <td style="width:4%;"></td>
+      <td style="width:38%; border-top:0.75pt solid #1a1d23; padding-top:3pt;
+                 font-size:7.5pt; color:#64748b;">Printed Name</td>
+      <td style="width:4%;"></td>
+      <td style="width:32%; border-top:0.75pt solid #1a1d23; padding-top:3pt;
+                 font-size:7.5pt; color:#64748b;">Date</td>
+      <td style="width:4%;"></td>
+    </tr>
+    <tr><td colspan="6" style="height:22pt;"></td></tr>
+
+    {# Supervisor row #}
+    <tr>
+      <td style="border-top:0.75pt solid #1a1d23; padding-top:3pt;
+                 font-size:7.5pt; color:#64748b;">Supervisor Signature</td>
+      <td></td>
+      <td style="border-top:0.75pt solid #1a1d23; padding-top:3pt;
+                 font-size:7.5pt; color:#64748b;">Printed Name</td>
+      <td></td>
+      <td style="border-top:0.75pt solid #1a1d23; padding-top:3pt;
+                 font-size:7.5pt; color:#64748b;">Date</td>
+      <td></td>
+    </tr>
+  </table>
+
+</div>
+
 
 {# Media lightbox #}
 <div class="media-backdrop" id="mediaModal" onclick="if(event.target.id==='mediaModal')closeMedia()">
