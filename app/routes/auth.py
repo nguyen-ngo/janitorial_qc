@@ -231,3 +231,55 @@ def toggle_active(user_id):
     )
     flash(f'User {user.username} has been {action_label}.', 'success')
     return redirect(request.referrer or url_for('auth.list_users'))
+
+# ── Notification Matrix ───────────────────────────────────────────────────────
+
+@bp.route('/notification-matrix', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def notification_matrix():
+    """Admin-only notification matrix — controls who receives each event type."""
+    import json as _json
+    from app.models.notification_matrix import (
+        NotificationMatrix, MATRIX_EVENTS, MATRIX_ROLES, MATRIX_DEFAULTS,
+    )
+
+    if request.method == 'POST':
+        for event_key in MATRIX_EVENTS:
+            for role_key, _ in MATRIX_ROLES:
+                row = NotificationMatrix.query.filter_by(
+                    event_type=event_key, role_key=role_key
+                ).first()
+                if row is None:
+                    row = NotificationMatrix(event_type=event_key, role_key=role_key)
+                    db.session.add(row)
+
+                if role_key == 'custom':
+                    raw = request.form.get(f'custom_{event_key}', '').strip()
+                    # Parse comma-separated emails into a JSON list
+                    emails = [e.strip() for e in raw.split(',') if e.strip()]
+                    row.custom_emails = _json.dumps(emails)
+                    row.enabled = bool(emails)
+                else:
+                    row.enabled = bool(request.form.get(f'matrix_{event_key}_{role_key}'))
+
+        db.session.commit()
+        log_action(ACTION_UPDATE, 'NotificationMatrix', None,
+                   'Notification Matrix', 'admin updated notification matrix')
+        logger.info('NOTIFICATION MATRIX UPDATED | by=%s', current_user.username)
+        flash('Notification matrix saved successfully.', 'success')
+        return redirect(url_for('auth.notification_matrix'))
+
+    # Build current state dict: {event_key: {role_key: enabled/emails}}
+    all_rows = NotificationMatrix.query.all()
+    state = {}   # event_key -> role_key -> row
+    for row in all_rows:
+        state.setdefault(row.event_type, {})[row.role_key] = row
+
+    return render_template(
+        'auth/notification_matrix.html',
+        matrix_events = MATRIX_EVENTS,
+        matrix_roles  = MATRIX_ROLES,
+        defaults      = MATRIX_DEFAULTS,
+        state         = state,
+    )

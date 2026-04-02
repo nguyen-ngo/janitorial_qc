@@ -15,7 +15,7 @@ from app.models.user import User
 from app.utils.forms import StartInspectionForm, IssueForm
 from app.utils.decorators import supervisor_required
 from app.utils.pdf_export import generate_inspection_pdf
-from app.utils.notifications import notify, notify_customers_for_facility
+from app.utils.notifications import notify, notify_customers_for_facility, notify_by_matrix
 from app.models.notification import (
     EVENT_INSPECTION_DONE, EVENT_ISSUE_ASSIGNED,
     EVENT_CUSTOMER_INSPECTION_DONE, EVENT_CUSTOMER_ISSUE_UPDATED,
@@ -371,36 +371,21 @@ def execute(inspection_id):
             _save_responses(inspection, responses)
             db.session.commit()
 
-            supervisors = User.query.filter(User.role.in_(['admin', 'supervisor'])).all()
             inspection_link = url_for('inspections.view', inspection_id=inspection.id)
             score_display = f'{score:.1f}%' if score is not None else 'N/A'
-            for supervisor in supervisors:
-                if supervisor.id != current_user.id:
-                    notify(
-                        recipient     = supervisor,
-                        title         = f'Inspection #{inspection.id} Completed',
-                        body          = (
-                            f'{current_user.username} completed an inspection at '
-                            f'{inspection.facility.name} using the '
-                            f'"{inspection.template.name}" template. '
-                            f'Overall score: {score_display}.'
-                        ),
-                        link          = inspection_link,
-                        inspection_id = inspection.id,
-                        event_type    = EVENT_INSPECTION_DONE,
-                        send_email    = True,
-                    )
-            notify_customers_for_facility(
-                facility_id   = inspection.facility_id,
-                event_type    = EVENT_CUSTOMER_INSPECTION_DONE,
-                title         = f'Inspection Completed at {inspection.facility.name}',
+            notify_by_matrix(
+                event_type    = 'inspection_completed',
+                title         = f'Inspection #{inspection.id} Completed',
                 body          = (
-                    f'An inspection using the "{inspection.template.name}" template '
-                    f'was completed at {inspection.facility.name}. '
+                    f'{current_user.username} completed an inspection at '
+                    f'{inspection.facility.name} using the '
+                    f'"{inspection.template.name}" template. '
                     f'Overall score: {score_display}.'
                 ),
-                link          = url_for('inspections.view', inspection_id=inspection.id),
+                link          = inspection_link,
                 inspection_id = inspection.id,
+                facility_id   = inspection.facility_id,
+                exclude_user_ids = {current_user.id},
             )
             db.session.commit()
             log_action(ACTION_UPDATE, 'Inspection', inspection.id,
@@ -736,19 +721,20 @@ def flag_issue(inspection_id):
                 )
                 db.session.commit()
 
-        notify_customers_for_facility(
-            facility_id = inspection.facility_id,
-            event_type  = EVENT_CUSTOMER_ISSUE_UPDATED,
-            title       = f'New Issue #{issue.id} at {inspection.facility.name}',
-            body        = (
+        notify_by_matrix(
+            event_type   = 'issue_flagged',
+            title        = f'New Issue #{issue.id} at {inspection.facility.name}',
+            body         = (
                 f'A new {issue.severity.title()}-severity issue has been logged '
                 f'in {issue.area.name} at {inspection.facility.name} '
                 f'during inspection #{inspection_id}. '
                 f'Description: {issue.description[:120]}'
                 f'{"…" if len(issue.description) > 120 else ""}'
             ),
-            link     = url_for('issues.view', issue_id=issue.id),
-            issue_id = issue.id,
+            link         = url_for('issues.view', issue_id=issue.id),
+            issue_id     = issue.id,
+            facility_id  = inspection.facility_id,
+            exclude_user_ids = {current_user.id},
         )
         db.session.commit()
 

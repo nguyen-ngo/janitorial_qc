@@ -468,3 +468,143 @@ def send_pending_digests(frequency: str = 'daily'):
             )
 
     return sent_count
+
+# ── Matrix-driven broadcast helpers ───────────────────────────────────────────
+
+def notify_by_matrix(
+    event_type: str,
+    title: str,
+    body: str,
+    link: str = None,
+    issue_id: int = None,
+    inspection_id: int = None,
+    facility_id: int = None,
+    exclude_user_ids: set = None,
+):
+    """
+    Dispatch in-app + email notifications for a broadcast event according
+    to the admin-configured notification matrix.
+
+    For each enabled role in the matrix, all active users with that role
+    are notified (optionally scoped to facility via CustomerAssignment for
+    the 'customer' role).  Custom email addresses are sent a plain email
+    without creating an in-app Notification record.
+
+    Parameters
+    ----------
+    event_type        : One of the MATRIX_EVENTS keys from notification_matrix.
+    title             : Short notification headline.
+    body              : Full notification body.
+    link              : Relative URL for 'View Details'.
+    issue_id          : FK to issues.id (optional).
+    inspection_id     : FK to inspections.id (optional).
+    facility_id       : Used to scope 'customer' role to assigned facility.
+    exclude_user_ids  : Set of user IDs to skip (e.g. the actor themselves).
+    """
+    from app.models.notification_matrix import (
+        is_enabled, get_custom_emails_for, MATRIX_ROLES,
+    )
+    from app.models.user import User
+
+    exclude = set(exclude_user_ids or [])
+    notified = set()   # deduplicate across roles
+
+    role_to_db = {
+        'admin':           'admin',
+        'supervisor':      'supervisor',
+        'inspector':       'inspector',
+        'project_manager': 'project_manager',
+        'customer':        'customer',
+    }
+
+    for role_key, _ in MATRIX_ROLES:
+        if role_key == 'custom':
+            continue   # handled separately below
+        if not is_enabled(event_type, role_key):
+            continue
+
+        db_role = role_to_db.get(role_key)
+        if not db_role:
+            continue
+
+        users = User.query.filter_by(role=db_role, active=True).all()
+
+        # Scope customer role to facility if provided
+        if role_key == 'customer' and facility_id:
+            from app.utils.notifications import notify_customers_for_facility
+            notify_customers_for_facility(
+                facility_id   = facility_id,
+                event_type    = event_type,
+                title         = title,
+                body          = body,
+                link          = link,
+                issue_id      = issue_id,
+                inspection_id = inspection_id,
+            )
+            continue   # notify_customers_for_facility handles dedup internally
+
+        for user in users:
+            if user.id in exclude or user.id in notified:
+                continue
+            notify(
+                recipient     = user,
+                title         = title,
+                body          = body,
+                link          = link,
+                issue_id      = issue_id,
+                inspection_id = inspection_id,
+                event_type    = event_type,
+                send_email    = True,
+            )
+            notified.add(user.id)
+
+    # ── Custom email recipients ───────────────────────────────────────────
+    custom_emails = get_custom_emails_for(event_type)
+    for email in custom_emails:
+        _send_custom_email(email, title, body, link)
+
+    logger.info(
+        'MATRIX NOTIFY | event=%s | notified=%s | custom_emails=%s',
+        event_type, len(notified), len(custom_emails),
+    )
+
+
+def _send_custom_email(to_email: str, title: str, body: str, link: str = None):
+    """Send a plain email to a custom (non-user) address. Best-effort."""
+    try:
+        base_url = current_app.config.get('APP_BASE_URL', '').rstrip('/')
+        sender   = current_app.config.get(
+            'MAIL_DEFAULT_SENDER',
+            current_app.config.get('MAIL_USERNAME', 'noreply@janitorialqc.local'),
+        )
+        html_body = render_template_string(
+            _EMAIL_HTML_SINGLE, title=title, body=body,
+            link=link, base_url=base_url,
+        )
+        text_body = render_template_string(
+            _EMAIL_TEXT_SINGLE, title=title, body=body,
+            link=link, base_url=base_url,
+        )
+        msg = Message(
+            subject    = f'[JQC] {title}',
+            sender     = sender,
+            recipients = [to_email],
+            body       = text_body,
+            html       = html_body,
+        )
+    except Exception as exc:
+        logger.error('CUSTOM EMAIL BUILD FAILED | to=%s | error=%s', to_email, exc)
+        return
+
+    app = current_app._get_current_object()
+
+    def _send():
+        with app.app_context():
+            try:
+                mail.send(msg)
+                logger.info('CUSTOM EMAIL SENT | to=%s', to_email)
+            except Exception as exc:
+                logger.error('CUSTOM EMAIL FAILED | to=%s | error=%s', to_email, exc)
+
+    import threading
+    threading.Thread(target=_send, daemon=True).start()

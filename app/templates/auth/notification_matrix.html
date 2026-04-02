@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}Notification Matrix{% endblock %}
+
+{% block extra_css %}
+<style>
+  .matrix-wrap { max-width: 1100px; margin: 0 auto; }
+
+  /* ── Matrix table ── */
+  .matrix-tbl { border-collapse: collapse; width: 100%; font-size: .82rem; }
+  .matrix-tbl th, .matrix-tbl td {
+    border: 1px solid #e2e8f0;
+    padding: .35rem .55rem;
+    vertical-align: middle;
+  }
+  .matrix-tbl thead th {
+    background: #1a1d23; color: #fff; font-weight: 600;
+    text-align: center; white-space: nowrap;
+  }
+  .matrix-tbl thead th.event-col { text-align: left; }
+  .matrix-tbl thead th.group-hdr {
+    background: #2563eb; font-size: .75rem; letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  .matrix-tbl tbody tr:nth-child(even) td { background: #f8fafc; }
+  .matrix-tbl tbody tr:hover td { background: #eff6ff; }
+  .matrix-tbl td.event-name { font-weight: 500; color: #1a1d23; white-space: nowrap; }
+  .matrix-tbl td.check-cell { text-align: center; }
+
+  /* Checkbox styling */
+  .matrix-check {
+    width: 1.1rem; height: 1.1rem; cursor: pointer;
+    accent-color: #2563eb;
+  }
+  /* Disabled row (event has no meaningful broadcast) */
+  .matrix-tbl tr.implicit td { color: #94a3b8; }
+  .matrix-tbl tr.implicit td.event-name { color: #64748b; font-style: italic; }
+
+  /* Custom emails cell */
+  .custom-cell { min-width: 180px; }
+  .custom-input {
+    width: 100%; font-size: .75rem;
+    border: 1px solid #e2e8f0; border-radius: 4px;
+    padding: .2rem .4rem; color: #374151;
+    background: #f8fafc;
+  }
+  .custom-input:focus {
+    outline: none; border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+  }
+
+  /* Legend */
+  .legend { font-size: .78rem; color: #64748b; }
+  .legend span { display: inline-flex; align-items: center; gap: .3rem; margin-right: 1rem; }
+
+  /* Implicit badge */
+  .badge-implicit {
+    font-size: .62rem; background: #f1f5f9; color: #64748b;
+    border: 1px solid #e2e8f0; border-radius: 4px;
+    padding: 1px 5px; vertical-align: middle;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="matrix-wrap mt-3">
+
+  {# ── Page header ── #}
+  <div class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+      <h4 class="mb-0"><i class="bi bi-grid-3x3-gap-fill text-primary me-2"></i>Notification Matrix</h4>
+      <p class="text-muted mb-0 mt-1" style="font-size:.85rem;">
+        Control which roles receive email notifications for each event.
+        <strong>Assignee</strong>, <strong>followers</strong>, and <strong>customer portal</strong>
+        recipients are handled automatically where marked.
+      </p>
+    </div>
+    <a href="{{ url_for('auth.list_users') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left"></i> Back to Users
+    </a>
+  </div>
+
+  {# ── Legend ── #}
+  <div class="legend mb-3 d-flex flex-wrap align-items-center">
+    <span><input type="checkbox" checked disabled class="matrix-check"> Enabled by default</span>
+    <span><input type="checkbox" disabled class="matrix-check"> Disabled by default</span>
+    <span><span class="badge-implicit">implicit</span> Always notified — not controlled here</span>
+  </div>
+
+  <form method="POST" action="{{ url_for('auth.notification_matrix') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="table-responsive shadow-sm rounded">
+      <table class="matrix-tbl">
+        <thead>
+          {# Row 1: spanning group headers #}
+          <tr>
+            <th class="event-col" rowspan="2" style="min-width:200px;">Event</th>
+            <th class="group-hdr" colspan="4">Internal Recipients</th>
+            <th class="group-hdr" colspan="1">Customer</th>
+            <th class="group-hdr" colspan="1">Custom Recipients</th>
+          </tr>
+          {# Row 2: individual role headers #}
+          <tr>
+            {% for role_key, role_label in matrix_roles if role_key != 'custom' and role_key != 'customer' %}
+            <th style="min-width:80px;">{{ role_label }}</th>
+            {% endfor %}
+            <th style="min-width:80px;">Customer</th>
+            <th style="min-width:200px;">Email addresses<br><span style="font-weight:400;font-size:.7rem;color:#94a3b8;">(comma-separated)</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for event_key, event_label in matrix_events.items() %}
+          {% set event_state = state.get(event_key, {}) %}
+          <tr>
+            <td class="event-name">
+              {{ event_label }}
+              {# Show implicit labels where assignee/followers are always notified #}
+              {% if event_key in ('issue_assigned', 'issue_reassigned', 'issue_unassigned',
+                                  'issue_status', 'issue_comment') %}
+              <span class="badge-implicit ms-1">assignee</span>
+              {% endif %}
+              {% if event_key == 'issue_follow_update' %}
+              <span class="badge-implicit ms-1">followers</span>
+              {% endif %}
+              {% if event_key == 'sla_alert' %}
+              <span class="badge-implicit ms-1">assignee</span>
+              <span class="badge-implicit ms-1">followers</span>
+              {% endif %}
+            </td>
+
+            {# Internal role checkboxes (admin, supervisor, inspector, project_manager) #}
+            {% for role_key, _ in matrix_roles if role_key not in ('custom', 'customer') %}
+            {% set row = event_state.get(role_key) %}
+            {% if row is not none %}
+              {% set checked = row.enabled %}
+            {% else %}
+              {% set checked = defaults.get((event_key, role_key), false) %}
+            {% endif %}
+            <td class="check-cell">
+              <input type="checkbox"
+                     class="matrix-check"
+                     name="matrix_{{ event_key }}_{{ role_key }}"
+                     value="1"
+                     {% if checked %}checked{% endif %}>
+            </td>
+            {% endfor %}
+
+            {# Customer checkbox #}
+            {% set cust_row = event_state.get('customer') %}
+            {% if cust_row is not none %}
+              {% set cust_checked = cust_row.enabled %}
+            {% else %}
+              {% set cust_checked = defaults.get((event_key, 'customer'), false) %}
+            {% endif %}
+            <td class="check-cell">
+              <input type="checkbox"
+                     class="matrix-check"
+                     name="matrix_{{ event_key }}_customer"
+                     value="1"
+                     {% if cust_checked %}checked{% endif %}>
+            </td>
+
+            {# Custom emails text input #}
+            {% set custom_row = event_state.get('custom') %}
+            {% if custom_row is not none %}
+              {% set custom_val = custom_row.get_custom_emails() | join(', ') %}
+            {% else %}
+              {% set custom_val = '' %}
+            {% endif %}
+            <td class="custom-cell">
+              <input type="text"
+                     class="custom-input"
+                     name="custom_{{ event_key }}"
+                     value="{{ custom_val }}"
+                     placeholder="e.g. ops@company.com, mgr@co.com">
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mt-3 d-flex gap-2 align-items-center">
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-check2-circle me-1"></i>Save Matrix
+      </button>
+      <a href="{{ url_for('auth.notification_matrix') }}" class="btn btn-outline-secondary">
+        Reset
+      </a>
+      <span class="text-muted ms-2" style="font-size:.8rem;">
+        <i class="bi bi-info-circle me-1"></i>
+        Changes take effect immediately for all subsequent notifications.
+      </span>
+    </div>
+  </form>
+
+  {# ── Notes card ── #}
+  <div class="card mt-4 border-0 bg-light">
+    <div class="card-body py-2 px-3">
+      <p class="mb-1" style="font-size:.8rem;">
+        <strong>Internal:</strong> Admin, Supervisor, Inspector, and Project Manager users
+        receive in-app notifications and emails based on their individual
+        <a href="{{ url_for('notifications.preferences') }}">preference settings</a>.
+      </p>
+      <p class="mb-1" style="font-size:.8rem;">
+        <strong>Customer:</strong> Customer-portal users are notified only for facilities
+        they are assigned to via their project/facility assignments.
+      </p>
+      <p class="mb-0" style="font-size:.8rem;">
+        <strong>Custom Recipients:</strong> Additional email addresses (e.g. external managers)
+        receive a plain email. They do not get in-app notifications and are not affected
+        by individual user preference settings.
+      </p>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

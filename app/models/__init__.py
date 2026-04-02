@@ -5,3 +5,4 @@ from app.models.inspection import (InspectionTemplate, ChecklistItem,
 from app.models.issue import Issue
 from app.models.project import Project, CustomerAssignment
 from app.models.api_token import RefreshToken, DeviceToken
+from app.models.notification_matrix import NotificationMatrix

@@ -52,6 +52,47 @@
             <a class="navbar-brand" href="{{ url_for('dashboard.index') }}">
                 <i class="bi bi-clipboard-check"></i> Janitorial QC
             </a>
+            <!-- ── Bell + toggler always visible on mobile/tablet ── -->
+            <div class="d-flex align-items-center gap-2 ms-auto me-2 d-lg-none">
+                <!-- Notification bell (always visible) -->
+                <div class="dropdown">
+                    <a class="nav-link position-relative notif-bell-wrapper text-white"
+                       href="#"
+                       id="notifDropdownMobile"
+                       role="button"
+                       data-bs-toggle="dropdown"
+                       aria-expanded="false"
+                       title="Notifications">
+                        <i class="bi bi-bell fs-5"></i>
+                        {% if unread_notification_count > 0 %}
+                        <span class="badge bg-danger notif-badge" id="notif-count-badge-mobile">
+                            {{ unread_notification_count if unread_notification_count <= 99 else '99+' }}
+                        </span>
+                        {% else %}
+                        <span class="badge bg-danger notif-badge d-none" id="notif-count-badge-mobile"></span>
+                        {% endif %}
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-end notif-dropdown shadow"
+                         id="notif-dropdown-menu-mobile">
+                        <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                            <span class="fw-semibold" style="font-size:.9rem;">Notifications</span>
+                            <button class="btn btn-link btn-sm p-0 text-muted text-decoration-none mark-all-read-btn"
+                                    style="font-size:.75rem;">Mark all as read</button>
+                        </div>
+                        <div class="notif-list-mobile">
+                            <div class="notif-empty">Loading…</div>
+                        </div>
+                        <div class="border-top d-flex justify-content-between px-3 py-2" style="font-size:.8rem;">
+                            <a href="{{ url_for('notifications.index') }}" class="text-decoration-none">
+                                <i class="bi bi-list-ul me-1"></i>View all
+                            </a>
+                            <a href="{{ url_for('notifications.preferences') }}" class="text-decoration-none text-muted">
+                                <i class="bi bi-gear me-1"></i>Preferences
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -111,12 +152,17 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('audit.index') }}">Audit Trail</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('auth.notification_matrix') }}">
+                            <i class="bi bi-grid-3x3-gap-fill"></i> Notif. Matrix
+                        </a>
+                    </li>
                     {% endif %}
                 </ul>
                 <ul class="navbar-nav align-items-center">
 
-                    <!-- ── Notification Bell ── -->
-                    <li class="nav-item dropdown me-2">
+                    <!-- ── Notification Bell (desktop lg+ only) ── -->
+                    <li class="nav-item dropdown me-2 d-none d-lg-block">
                         <a class="nav-link position-relative notif-bell-wrapper"
                            href="#"
                            id="notifDropdown"
@@ -227,48 +273,59 @@
         const CSRF_TOKEN     = '{{ csrf_token() }}';
         const POLL_INTERVAL  = 60000;  // 60 seconds
 
-        const badge      = document.getElementById('notif-count-badge');
-        const listEl     = document.getElementById('notif-list');
-        const markAllBtn = document.getElementById('mark-all-read-btn');
+        // ── Element refs — desktop bell (lg+) and mobile/tablet bell (<lg) ──
+        const badgeDesktop  = document.getElementById('notif-count-badge');
+        const badgeMobile   = document.getElementById('notif-count-badge-mobile');
+        const listDesktop   = document.getElementById('notif-list');
+        const listMobile    = document.querySelector('.notif-list-mobile');
 
+        // ── Update both badge instances ────────────────────────────────────────
         function updateBadge(count) {
-            if (count > 0) {
-                badge.textContent = count > 99 ? '99+' : count;
-                badge.classList.remove('d-none');
-            } else {
-                badge.textContent = '';
-                badge.classList.add('d-none');
-            }
+            [badgeDesktop, badgeMobile].forEach(function(badge) {
+                if (!badge) return;
+                if (count > 0) {
+                    badge.textContent = count > 99 ? '99+' : count;
+                    badge.classList.remove('d-none');
+                } else {
+                    badge.textContent = '';
+                    badge.classList.add('d-none');
+                }
+            });
         }
 
-        function renderNotifications(notifications) {
+        // ── Render notification items into a given container ───────────────────
+        function renderInto(container, notifications) {
+            if (!container) return;
             if (!notifications.length) {
-                listEl.innerHTML = '<div class="notif-empty">'
+                container.innerHTML = '<div class="notif-empty">'
                     + '<i class="bi bi-check2-circle me-1"></i>You\'re all caught up!</div>';
                 return;
             }
-
-            listEl.innerHTML = notifications.map(n => `
-                <div class="d-block text-decoration-none text-dark notif-item px-3 py-2 border-bottom
-                            ${n.is_read ? '' : 'unread'}"
-                     data-notif-id="${n.id}"
-                     data-link="${escapeAttr(n.link || '')}">
-                    <div class="notif-title">${escapeHtml(n.title)}</div>
-                    <div class="notif-body">${escapeHtml(n.body)}</div>
-                    <div class="notif-time">${escapeHtml(n.created_at)}</div>
-                </div>
-            `).join('');
-
-            listEl.querySelectorAll('.notif-item').forEach(el => {
-                el.addEventListener('click', function () {
-                    const id   = this.dataset.notifId;
-                    const link = this.dataset.link;
-                    markRead(id, () => {
-                        this.classList.remove('unread');
+            container.innerHTML = notifications.map(function(n) {
+                return '<div class="d-block text-decoration-none text-dark notif-item px-3 py-2 border-bottom '
+                    + (n.is_read ? '' : 'unread') + '"'
+                    + ' data-notif-id="' + n.id + '"'
+                    + ' data-link="' + escapeAttr(n.link || '') + '">'
+                    + '<div class="notif-title">' + escapeHtml(n.title) + '</div>'
+                    + '<div class="notif-body">'  + escapeHtml(n.body)  + '</div>'
+                    + '<div class="notif-time">'  + escapeHtml(n.created_at) + '</div>'
+                    + '</div>';
+            }).join('');
+            container.querySelectorAll('.notif-item').forEach(function(el) {
+                el.addEventListener('click', function() {
+                    var id   = this.dataset.notifId;
+                    var link = this.dataset.link;
+                    markRead(id, function() {
+                        el.classList.remove('unread');
                         if (link) window.location.href = link;
                     });
                 });
             });
+        }
+
+        function renderNotifications(notifications) {
+            renderInto(listDesktop, notifications);
+            renderInto(listMobile,  notifications);
         }
 
         function escapeHtml(str) {
@@ -278,55 +335,69 @@
         }
         function escapeAttr(str) { return escapeHtml(str); }
 
+        // ── Fetch + update ─────────────────────────────────────────────────────
         window.fetchNotifications = function fetchNotifications() {
             fetch(FEED_URL, { credentials: 'same-origin' })
-                .then(r => r.json())
-                .then(data => {
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
                     updateBadge(data.unread_count);
                     window._jqcNotifications = data.notifications;
-                    const dropdownEl = document.getElementById('notifDropdown');
-                    if (dropdownEl.getAttribute('aria-expanded') === 'true') {
+                    var deskEl   = document.getElementById('notifDropdown');
+                    var mobileEl = document.getElementById('notifDropdownMobile');
+                    var deskOpen   = deskEl   && deskEl.getAttribute('aria-expanded')   === 'true';
+                    var mobileOpen = mobileEl && mobileEl.getAttribute('aria-expanded') === 'true';
+                    if (deskOpen || mobileOpen) {
                         renderNotifications(data.notifications);
                     }
                 })
-                .catch(() => {});
-        }
+                .catch(function() {});
+        };
 
         function markRead(id, callback) {
-            fetch(`${MARK_READ_BASE}${id}/mark-read`, {
+            fetch(MARK_READ_BASE + id + '/mark-read', {
                 method: 'POST',
                 headers: { 'X-CSRFToken': CSRF_TOKEN, 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
             })
-            .then(r => r.json())
-            .then(() => { if (callback) callback(); fetchNotifications(); })
-            .catch(() => { if (callback) callback(); });
+            .then(function(r) { return r.json(); })
+            .then(function() { if (callback) callback(); fetchNotifications(); })
+            .catch(function() { if (callback) callback(); });
         }
 
-        document.getElementById('notifDropdown').addEventListener('show.bs.dropdown', function () {
-            if (window._jqcNotifications) {
-                renderNotifications(window._jqcNotifications);
-            } else {
-                fetchNotifications();
-            }
+        // ── Show dropdown → render cached data immediately ─────────────────────
+        ['notifDropdown', 'notifDropdownMobile'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('show.bs.dropdown', function() {
+                if (window._jqcNotifications) {
+                    renderNotifications(window._jqcNotifications);
+                } else {
+                    fetchNotifications();
+                }
+            });
         });
 
-        markAllBtn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            fetch(MARK_ALL_URL, {
-                method: 'POST',
-                headers: { 'X-CSRFToken': CSRF_TOKEN },
-                credentials: 'same-origin',
-            })
-            .then(r => r.json())
-            .then(() => {
-                updateBadge(0);
-                listEl.querySelectorAll('.notif-item.unread').forEach(el => el.classList.remove('unread'));
-                if (window._jqcNotifications) {
-                    window._jqcNotifications.forEach(n => n.is_read = true);
-                }
-            })
-            .catch(() => {});
+        // ── Mark all read — works from either bell ─────────────────────────────
+        document.querySelectorAll('#mark-all-read-btn, .mark-all-read-btn').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                fetch(MARK_ALL_URL, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': CSRF_TOKEN },
+                    credentials: 'same-origin',
+                })
+                .then(function(r) { return r.json(); })
+                .then(function() {
+                    updateBadge(0);
+                    document.querySelectorAll('.notif-item.unread').forEach(function(el) {
+                        el.classList.remove('unread');
+                    });
+                    if (window._jqcNotifications) {
+                        window._jqcNotifications.forEach(function(n) { n.is_read = true; });
+                    }
+                })
+                .catch(function() {});
+            });
         });
 
         fetchNotifications();

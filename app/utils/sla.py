@@ -105,8 +105,7 @@ def send_sla_alerts():
     from app import db
     from app.models.issue import Issue
     from app.models.user import User
-    from app.utils.notifications import notify
-    from app.models.notification import EVENT_SLA_ALERT
+    from app.utils.notifications import notify, notify_by_matrix
     import logging
 
     logger = logging.getLogger(__name__)
@@ -114,8 +113,6 @@ def send_sla_alerts():
     open_issues = Issue.query.filter(
         Issue.status.in_(['open', 'in_progress', 'pending_verification'])
     ).all()
-
-    admins = User.query.filter_by(role='admin').all()
 
     total_sent = 0
 
@@ -133,24 +130,8 @@ def send_sla_alerts():
         if already == 'at_risk' and status == 'at_risk':
             continue   # at_risk already sent, not yet breached
 
-        # Build recipient set — deduplicated by user.id
-        recipients = {}
-
-        for admin in admins:
-            recipients[admin.id] = admin
-
-        if issue.assigned_to and issue.assigned_user:
-            recipients[issue.assigned_user.id] = issue.assigned_user
-
-        for follower_link in issue.followers.all():
-            user = follower_link.user
-            recipients[user.id] = user
-
-        if not recipients:
-            continue
-
         # Compose message
-        hrs   = sla_hours_remaining(issue)
+        hrs      = sla_hours_remaining(issue)
         deadline = sla_deadline(issue)
 
         if status == 'breached':
@@ -178,23 +159,51 @@ def send_sla_alerts():
         except RuntimeError:
             link = f'/issues/{issue.id}'
 
-        for user in recipients.values():
+        # Always notify the assignee and followers (implicit, not matrix-controlled)
+        implicit_notified = set()
+        if issue.assigned_to and issue.assigned_user:
             notify(
-                recipient  = user,
+                recipient  = issue.assigned_user,
                 title      = title,
                 body       = body,
                 link       = link,
                 issue_id   = issue.id,
-                event_type = EVENT_SLA_ALERT,
+                event_type = 'sla_alert',
                 send_email = True,
             )
+            implicit_notified.add(issue.assigned_user.id)
             total_sent += 1
+
+        for follower_link in issue.followers.all():
+            if follower_link.user_id not in implicit_notified:
+                notify(
+                    recipient  = follower_link.user,
+                    title      = title,
+                    body       = body,
+                    link       = link,
+                    issue_id   = issue.id,
+                    event_type = 'sla_alert',
+                    send_email = True,
+                )
+                implicit_notified.add(follower_link.user_id)
+                total_sent += 1
+
+        # Matrix-controlled broadcast (admin, supervisor, etc.)
+        notify_by_matrix(
+            event_type       = 'sla_alert',
+            title            = title,
+            body             = body,
+            link             = link,
+            issue_id         = issue.id,
+            exclude_user_ids = implicit_notified,
+        )
+        total_sent += 1  # approximate — matrix count not returned
 
         # Mark this issue as notified at the current level
         issue.sla_notified = status
         logger.info(
-            'SLA ALERT SENT | issue_id=%s | status=%s | recipients=%s',
-            issue.id, status, list(recipients.keys()),
+            'SLA ALERT SENT | issue_id=%s | status=%s',
+            issue.id, status,
         )
 
     if total_sent:

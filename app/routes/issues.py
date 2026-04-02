@@ -14,7 +14,7 @@ from app.models.notification import (
 )
 from app.utils.forms import IssueForm, IssueUpdateForm
 from app.utils.decorators import supervisor_required
-from app.utils.notifications import notify, notify_customers_for_facility
+from app.utils.notifications import notify, notify_customers_for_facility, notify_by_matrix
 from app.utils.audit import log_action, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE
 from app.utils.scope import get_customer_scope
 from app.utils.sla import sla_status
@@ -268,21 +268,22 @@ def view(issue_id):
                 exclude_user_ids = exclude_ids,
             )
 
-        # ── Notify customer portal users for this facility ──────────
+        # ── Notify via matrix (issue_updated_customer) ───────────────
         facility_id = issue.area.facility_id if issue.area else None
-        if facility_id:
-            changes_summary = '; '.join(changes) if changes else 'updated'
-            notify_customers_for_facility(
-                facility_id = facility_id,
-                event_type  = EVENT_CUSTOMER_ISSUE_UPDATED,
-                title       = f'Issue #{issue.id} Updated at {issue.area.facility.name}',
-                body        = (
+        if facility_id and changes:
+            changes_summary = '; '.join(changes)
+            notify_by_matrix(
+                event_type   = 'issue_updated_customer',
+                title        = f'Issue #{issue.id} Updated at {issue.area.facility.name}',
+                body         = (
                     f'Issue #{issue.id} ({issue.severity.title()} severity) '
                     f'in {issue.area.name} was updated: {changes_summary}. '
                     f'Current status: {issue.status.replace("_", " ").title()}.'
                 ),
-                link     = url_for('issues.view', issue_id=issue.id),
-                issue_id = issue.id,
+                link         = url_for('issues.view', issue_id=issue.id),
+                issue_id     = issue.id,
+                facility_id  = facility_id,
+                exclude_user_ids = {current_user.id},
             )
         db.session.commit()  # Commit all notifications
         log_action(ACTION_UPDATE, 'Issue', issue.id,
@@ -398,21 +399,22 @@ def create():
                 )
                 db.session.commit()
 
-        # ── Notify customer portal users for this facility ──────────
+        # ── Notify via matrix (issue_created) ────────────────────────
         area = db.session.get(Area, issue.area_id)
         if area:
-            notify_customers_for_facility(
-                facility_id = area.facility_id,
-                event_type  = EVENT_CUSTOMER_ISSUE_UPDATED,
-                title       = f'New Issue #{issue.id} at {area.facility.name}',
-                body        = (
+            notify_by_matrix(
+                event_type   = 'issue_created',
+                title        = f'New Issue #{issue.id} at {area.facility.name}',
+                body         = (
                     f'A new {issue.severity.title()}-severity issue has been logged '
                     f'in {area.name} at {area.facility.name}. '
                     f'Description: {issue.description[:120]}'
                     f'{"…" if len(issue.description) > 120 else ""}'
                 ),
-                link     = url_for('issues.view', issue_id=issue.id),
-                issue_id = issue.id,
+                link         = url_for('issues.view', issue_id=issue.id),
+                issue_id     = issue.id,
+                facility_id  = area.facility_id,
+                exclude_user_ids = {current_user.id},
             )
             db.session.commit()
         flash('Issue created.', 'success')
@@ -489,25 +491,19 @@ def request_verification(issue_id):
                f'#{issue_id} in {issue.area.name}',
                f'status=pending_verification; requested_by={current_user.username}')
 
-    # Notify supervisors
-    from app.utils.notifications import notify
-    from app.models.notification import EVENT_ISSUE_STATUS
-    supervisors = User.query.filter(User.role.in_(['admin', 'supervisor'])).all()
-    for sup in supervisors:
-        if sup.id != current_user.id:
-            notify(
-                recipient  = sup,
-                title      = f'Issue #{issue_id} Awaiting Verification',
-                body       = (
-                    f'{current_user.username} has marked Issue #{issue_id} '
-                    f'({issue.severity.title()} severity) in {issue.area.name} '
-                    f'as pending your verification.'
-                ),
-                link       = url_for('issues.view', issue_id=issue_id),
-                issue_id   = issue_id,
-                event_type = EVENT_ISSUE_STATUS,
-                send_email = True,
-            )
+    # Notify via matrix (verification_requested)
+    notify_by_matrix(
+        event_type   = 'verification_requested',
+        title        = f'Issue #{issue_id} Awaiting Verification',
+        body         = (
+            f'{current_user.username} has marked Issue #{issue_id} '
+            f'({issue.severity.title()} severity) in {issue.area.name} '
+            f'as pending your verification.'
+        ),
+        link         = url_for('issues.view', issue_id=issue_id),
+        issue_id     = issue_id,
+        exclude_user_ids = {current_user.id},
+    )
     db.session.commit()
     flash('Issue marked as pending verification. Supervisors have been notified.', 'info')
     return redirect(url_for('issues.view', issue_id=issue_id))
