@@ -107,10 +107,11 @@ def create():
 
     if form.validate_on_submit():
         user = User(
-            username = form.username.data,
-            email    = form.email.data,
-            role     = 'customer',
-            active   = True,
+            username  = form.username.data,
+            full_name = form.full_name.data.strip() or None,
+            email     = form.email.data,
+            role      = 'customer',
+            active    = True,
         )
         user.set_password(form.password.data)
         db.session.add(user)
@@ -139,8 +140,9 @@ def edit(customer_id):
     form = CustomerUserForm(user=customer, obj=customer)
 
     if form.validate_on_submit():
-        customer.username = form.username.data
-        customer.email    = form.email.data
+        customer.username  = form.username.data
+        customer.full_name = form.full_name.data.strip() or None
+        customer.email     = form.email.data
         if form.password.data:
             customer.set_password(form.password.data)
         db.session.commit()

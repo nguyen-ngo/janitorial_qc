@@ -18,6 +18,7 @@ class LoginForm(FlaskForm):
 
 class ProfileForm(FlaskForm):
     """Self-service profile update form — available to all authenticated users."""
+    full_name        = StringField('Full Name', validators=[Optional(), Length(max=150)])
     email            = StringField('Email', validators=[DataRequired(), Email(), Length(max=255)])
     current_password = PasswordField('Current Password', validators=[Optional()])
     new_password     = PasswordField('New Password',     validators=[Optional(), Length(min=6, max=100)])
@@ -45,6 +46,7 @@ class ProfileForm(FlaskForm):
 
 class UserForm(FlaskForm):
     username        = StringField('Username', validators=[DataRequired(), Length(min=3, max=100)])
+    full_name       = StringField('Full Name', validators=[Optional(), Length(max=150)])
     email           = StringField('Email', validators=[DataRequired(), Email(), Length(max=255)])
     password        = PasswordField('Password', validators=[Optional(), Length(min=6, max=100)])
     confirm_password = PasswordField('Confirm Password', validators=[Optional(), EqualTo('password')])
@@ -101,7 +103,7 @@ class FacilityForm(FlaskForm):
 class AreaForm(FlaskForm):
     name      = StringField('Area Name', validators=[DataRequired(), Length(max=255)])
     area_type = SelectField('Area Type', choices=[
-        ('building','Building'), ('restroom','Restroom'), ('lobby','Lobby'), ('hallway','Hallway'),
+        ('restroom','Restroom'), ('lobby','Lobby'), ('hallway','Hallway'),
         ('office','Office'), ('kitchen','Kitchen'), ('storage','Storage'),
         ('outdoor','Outdoor'), ('other','Other'),
     ], validators=[Optional()])
@@ -198,6 +200,7 @@ class CustomerUserForm(FlaskForm):
     Password is required on create; optional on edit.
     """
     username         = StringField('Username', validators=[DataRequired(), Length(min=3, max=100)])
+    full_name        = StringField('Full Name', validators=[Optional(), Length(max=150)])
     email            = StringField('Email',    validators=[DataRequired(), Email(), Length(max=255)])
     password         = PasswordField('Password', validators=[Optional(), Length(min=8)])
     confirm_password = PasswordField('Confirm Password',

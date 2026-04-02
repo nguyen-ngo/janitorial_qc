@@ -23,7 +23,10 @@
                         <i class="bi bi-person-circle"></i>
                     </span>
                 </div>
-                <h4 class="mb-1 fw-bold">{{ current_user.username }}</h4>
+                <h4 class="mb-1 fw-bold">{{ current_user.display_name }}</h4>
+                {% if current_user.full_name %}
+                <p class="text-muted mb-1" style="font-size:.85rem;">@{{ current_user.username }}</p>
+                {% endif %}
                 <p class="text-muted mb-2">{{ current_user.email }}</p>
                 <span class="badge fs-6 bg-{% if current_user.role == 'admin' %}danger{% elif current_user.role == 'supervisor' %}warning{% else %}info{% endif %}">
                     <i class="bi bi-{% if current_user.role == 'admin' %}shield-fill{% elif current_user.role == 'supervisor' %}star-fill{% else %}person-badge-fill{% endif %} me-1"></i>
@@ -91,6 +94,15 @@
             <div class="card-body">
                 <form method="POST" action="{{ url_for('auth.profile') }}">
                     {{ form.hidden_tag() }}
+
+                    <!-- Full Name -->
+                    <div class="mb-3">
+                        {{ form.full_name.label(class="form-label fw-semibold") }}
+                        {{ form.full_name(class="form-control", placeholder="e.g. Jane Smith") }}
+                        {% for error in form.full_name.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
 
                     <!-- Email -->
                     <div class="mb-3">

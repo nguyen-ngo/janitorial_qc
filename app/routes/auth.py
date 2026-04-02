@@ -74,6 +74,7 @@ def profile():
     form = ProfileForm(user=current_user, obj=current_user)
 
     if form.validate_on_submit():
+        current_user.full_name = form.full_name.data.strip() or None
         current_user.email = form.email.data
 
         if form.new_password.data:
@@ -134,6 +135,7 @@ def create_user():
     if form.validate_on_submit():
         user = User(
             username=form.username.data,
+            full_name=form.full_name.data.strip() or None,
             email=form.email.data,
             role=form.role.data
         )
@@ -158,9 +160,10 @@ def edit_user(user_id):
     form = UserForm(user=user, obj=user)
 
     if form.validate_on_submit():
-        user.username = form.username.data
-        user.email    = form.email.data
-        user.role     = form.role.data
+        user.username  = form.username.data
+        user.full_name = form.full_name.data.strip() or None
+        user.email     = form.email.data
+        user.role      = form.role.data
 
         if form.password.data:
             user.set_password(form.password.data)

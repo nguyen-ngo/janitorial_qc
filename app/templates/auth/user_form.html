@@ -57,6 +57,18 @@
                         </div>
 
                         <div class="col-md-6 mb-3">
+                            {{ form.full_name.label(class="form-label") }}
+                            {{ form.full_name(class="form-control", placeholder="e.g. Jane Smith") }}
+                            {% if form.full_name.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.full_name.errors %}{{ error }}{% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
                             {{ form.email.label(class="form-label") }}
                             {{ form.email(class="form-control") }}
                             {% if form.email.errors %}

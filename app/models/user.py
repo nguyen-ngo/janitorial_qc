@@ -12,6 +12,7 @@ class User(UserMixin, db.Model):
 
     id            = db.Column(db.Integer, primary_key=True)
     username      = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    full_name     = db.Column(db.String(150), nullable=True)
     email         = db.Column(db.String(255), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
     role          = db.Column(
@@ -36,6 +37,11 @@ class User(UserMixin, db.Model):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+    @property
+    def display_name(self):
+        """Return full name if set, otherwise fall back to username."""
+        return self.full_name.strip() if self.full_name and self.full_name.strip() else self.username
 
     def __repr__(self):
         return f'<User {self.username}>'

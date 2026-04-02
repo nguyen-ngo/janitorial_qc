@@ -25,6 +25,7 @@
         <thead class="table-light">
           <tr>
             <th>Username</th>
+            <th>Full Name</th>
             <th>Email</th>
             <th>Status</th>
             <th>Assigned Projects</th>
@@ -46,6 +47,7 @@
                 </a>
               </strong>
             </td>
+            <td>{{ customer.full_name or '—' }}</td>
             <td class="small text-muted">{{ customer.email }}</td>
             <td>
               {% if customer.active %}
