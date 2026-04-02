@@ -5,14 +5,14 @@
 <div class="row mb-4 align-items-center">
   <div class="col">
     <h2>
-      <i class="bi bi-person-badge"></i> {{ customer.username }}
+      <i class="bi bi-person-badge"></i> {{ customer.display_name }}
       {% if not customer.active %}
       <span class="badge bg-secondary ms-2 fs-6">Disabled</span>
       {% else %}
       <span class="badge bg-success ms-2 fs-6">Active</span>
       {% endif %}
     </h2>
-    <p class="text-muted mb-0 small">{{ customer.email }}</p>
+    <p class="text-muted mb-0 small">{{ customer.email }}{% if customer.full_name %} · @{{ customer.username }}{% endif %}</p>
   </div>
   <div class="col-auto d-flex gap-2">
     <a href="{{ url_for('customers.edit', customer_id=customer.id) }}"
@@ -46,6 +46,8 @@
       </div>
       <div class="card-body">
         <dl class="row mb-0 small">
+          <dt class="col-5 text-muted">Full Name</dt>
+          <dd class="col-7">{{ customer.full_name or '—' }}</dd>
           <dt class="col-5 text-muted">Username</dt>
           <dd class="col-7">{{ customer.username }}</dd>
           <dt class="col-5 text-muted">Email</dt>
@@ -56,6 +58,14 @@
               {{ 'Active' if customer.active else 'Disabled' }}
             </span>
           </dd>
+          <dt class="col-5 text-muted">Password</dt>
+          <dd class="col-7">
+            {% if customer.password_set %}
+            <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Set</span>
+            {% else %}
+            <span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split me-1"></i>Pending setup</span>
+            {% endif %}
+          </dd>
           <dt class="col-5 text-muted">Created</dt>
           <dd class="col-7">{{ customer.created_at.strftime('%Y-%m-%d') }}</dd>
           <dt class="col-5 text-muted">Assignments</dt>
@@ -63,6 +73,17 @@
           <dt class="col-5 text-muted">Facilities</dt>
           <dd class="col-7">{{ facilities|length }}</dd>
         </dl>
+        {% if not customer.password_set %}
+        <hr class="my-3">
+        <form method="POST"
+              action="{{ url_for('customers.resend_invite', customer_id=customer.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-outline-primary btn-sm w-100"
+                  onclick="return confirm('Resend invitation email to {{ customer.email }}?')">
+            <i class="bi bi-send me-1"></i>Resend Invitation Email
+          </button>
+        </form>
+        {% endif %}
       </div>
     </div>
 

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Create Customer Account{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-6 offset-md-3">
+
+    <div class="card shadow-sm">
+      <div class="card-header bg-primary text-white">
+        <h4 class="mb-0">
+          <i class="bi bi-person-plus-fill me-2"></i>Create Customer Account
+        </h4>
+      </div>
+      <div class="card-body">
+
+        <p class="text-muted mb-4" style="font-size:.9rem;">
+          Enter the customer's name and email address. An invitation email will be
+          sent automatically with a secure link to set their password.
+          The account will be activated once they complete that step.
+        </p>
+
+        <form method="POST">
+          {{ form.hidden_tag() }}
+
+          <div class="mb-3">
+            {{ form.full_name.label(class="form-label fw-semibold") }}
+            {{ form.full_name(class="form-control" + (" is-invalid" if form.full_name.errors else ""),
+                              placeholder="e.g. Jane Smith", autofocus=true) }}
+            {% for error in form.full_name.errors %}
+            <div class="invalid-feedback">{{ error }}</div>
+            {% endfor %}
+          </div>
+
+          <div class="mb-4">
+            {{ form.email.label(class="form-label fw-semibold") }}
+            {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else ""),
+                          placeholder="jane@example.com") }}
+            {% for error in form.email.errors %}
+            <div class="invalid-feedback">{{ error }}</div>
+            {% endfor %}
+            <div class="form-text">
+              <i class="bi bi-envelope me-1"></i>
+              An invitation email with a password setup link will be sent to this address.
+            </div>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-send me-1"></i>Create &amp; Send Invitation
+            </button>
+            <a href="{{ url_for('customers.index') }}" class="btn btn-outline-secondary">
+              <i class="bi bi-x-circle me-1"></i>Cancel
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card mt-3 border-0 bg-light">
+      <div class="card-body py-2 px-3">
+        <p class="mb-1" style="font-size:.8rem;">
+          <i class="bi bi-info-circle me-1 text-primary"></i>
+          <strong>What happens next:</strong>
+        </p>
+        <ol class="mb-0 ps-3" style="font-size:.8rem; color:#555;">
+          <li>A username is automatically generated from the email address.</li>
+          <li>An invitation email is sent to the customer with a secure 72-hour link.</li>
+          <li>The customer clicks the link and sets their own password.</li>
+          <li>The account becomes fully active and they can log in immediately.</li>
+        </ol>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

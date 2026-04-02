@@ -19,7 +19,7 @@ from app import db
 from app.models.user import User
 from app.models.project import Project, CustomerAssignment
 from app.models.facility import Facility
-from app.utils.forms import CustomerUserForm, CustomerAssignmentForm
+from app.utils.forms import CustomerUserForm, CustomerAssignmentForm, CustomerInviteForm, SetPasswordForm
 from app.utils.decorators import admin_required
 from app.utils.audit import log_action, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE
 from app.utils.scope import get_customer_scope
@@ -97,34 +97,199 @@ def index():
     )
 
 
-# ── Create customer ───────────────────────────────────────────────────────────
+# ── Create customer (invitation flow) ────────────────────────────────────────
 
 @bp.route('/new', methods=['GET', 'POST'])
 @login_required
 @admin_required
 def create():
-    form = CustomerUserForm()
+    """Create a customer account via email invitation.
+
+    Only Full Name and Email are required. A username is auto-generated
+    from the email address. A one-time set-password link is emailed to
+    the customer; they cannot log in until that link is used.
+    """
+    form = CustomerInviteForm()
 
     if form.validate_on_submit():
+        import re, secrets
+
+        full_name = form.full_name.data.strip()
+        email     = form.email.data.strip().lower()
+
+        # Auto-generate username from email local part, made unique if needed
+        base_uname = re.sub(r'[^a-z0-9._-]', '', email.split('@')[0])[:40] or 'customer'
+        username   = base_uname
+        suffix     = 1
+        while User.query.filter_by(username=username).first():
+            username = f'{base_uname}{suffix}'
+            suffix  += 1
+
+        # Create user with random placeholder password (password_set=False blocks login)
         user = User(
-            username  = form.username.data,
-            full_name = form.full_name.data.strip() or None,
-            email     = form.email.data,
-            role      = 'customer',
-            active    = True,
+            username     = username,
+            full_name    = full_name,
+            email        = email,
+            role         = 'customer',
+            active       = True,
+            password_set = False,
         )
-        user.set_password(form.password.data)
+        user.set_password(secrets.token_hex(32))
         db.session.add(user)
+        db.session.flush()
+
+        token = user.generate_set_password_token(expires_hours=72)
         db.session.commit()
-        logger.info('CUSTOMERS | create | admin=%s new_customer=%s email=%s',
+
+        logger.info('CUSTOMERS | invite | admin=%s new_customer=%s email=%s',
                     current_user.username, user.username, user.email)
         log_action(ACTION_CREATE, 'User', user.id, user.username,
-                   f'role=customer; email={user.email}; created_via=customer_mgmt')
-        flash(f'Customer account "{user.username}" created successfully.', 'success')
+                   f'role=customer; email={user.email}; invite_sent=True')
+
+        _send_invite_email(user, token)
+
+        flash(
+            f'Customer account created for {full_name}. '
+            f'An invitation email has been sent to {email} with a link to set their password.',
+            'success'
+        )
         return redirect(url_for('customers.manage', customer_id=user.id))
 
-    return render_template('customers/form.html', form=form, title='Create Customer Account')
+    return render_template('customers/invite.html', form=form)
 
+
+def _send_invite_email(user, token):
+    """Send the account setup email to a newly created customer."""
+    from flask import current_app, render_template_string
+    from flask_mail import Message
+    from app import mail
+    import threading
+
+    if not current_app.config.get('MAIL_SERVER'):
+        logger.warning('INVITE EMAIL SKIPPED | no MAIL_SERVER | user=%s', user.username)
+        return
+
+    base_url   = current_app.config.get('APP_BASE_URL', '').rstrip('/')
+    setup_link = f'{base_url}{url_for("customers.set_password", token=token)}'
+    sender     = current_app.config.get(
+        'MAIL_DEFAULT_SENDER',
+        current_app.config.get('MAIL_USERNAME', 'noreply@janitorialqc.local'),
+    )
+
+    html_body = render_template_string("""<!DOCTYPE html>
+<html>
+<body style="font-family:Arial,sans-serif;color:#333;max-width:600px;margin:auto;">
+  <h2 style="color:#0d6efd;">Welcome to the Janitorial QC System</h2>
+  <p>Hi {{ name }},</p>
+  <p>An account has been created for you on the Janitorial QC (JQC) portal.
+     To get started, please set your password using the button below.</p>
+  <p>
+    <a href="{{ link }}"
+       style="background:#0d6efd;color:#fff;padding:12px 24px;
+              text-decoration:none;border-radius:4px;display:inline-block;font-weight:bold;">
+      Set My Password
+    </a>
+  </p>
+  <p style="font-size:13px;color:#666;">
+    This link expires in <strong>72 hours</strong>. If you did not expect this email,
+    you can safely ignore it.
+  </p>
+  <p style="font-size:13px;color:#888;">
+    Or copy this URL:<br>
+    <a href="{{ link }}" style="color:#0d6efd;">{{ link }}</a>
+  </p>
+  <hr style="border:none;border-top:1px solid #eee;margin-top:32px;">
+  <p style="font-size:12px;color:#888;">Janitorial QC System — do not reply.</p>
+</body>
+</html>""", name=user.display_name, link=setup_link)
+
+    text_body = (
+        f'Hi {user.display_name},\n\n'
+        f'An account has been created for you on the Janitorial QC portal.\n'
+        f'Set your password here:\n\n{setup_link}\n\n'
+        f'This link expires in 72 hours.\n\nJanitorial QC System'
+    )
+
+    msg = Message(
+        subject    = '[JQC] Your account is ready — please set your password',
+        sender     = sender,
+        recipients = [user.email],
+        body       = text_body,
+        html       = html_body,
+    )
+
+    app = current_app._get_current_object()
+
+    def _send():
+        with app.app_context():
+            try:
+                mail.send(msg)
+                logger.info('INVITE EMAIL SENT | to=%s | user=%s', user.email, user.username)
+            except Exception as exc:
+                logger.error('INVITE EMAIL FAILED | to=%s | error=%s', user.email, exc)
+
+    threading.Thread(target=_send, daemon=True).start()
+
+
+# ── Resend invitation email ───────────────────────────────────────────────────
+
+@bp.route('/<int:customer_id>/resend-invite', methods=['POST'])
+@login_required
+@admin_required
+def resend_invite(customer_id):
+    """Generate a fresh token and resend the set-password invitation email."""
+    customer = User.query.get_or_404(customer_id)
+    if customer.role != 'customer':
+        flash('This action is only for customer accounts.', 'warning')
+        return redirect(url_for('customers.index'))
+
+    token = customer.generate_set_password_token(expires_hours=72)
+    customer.password_set = False
+    db.session.commit()
+
+    logger.info('CUSTOMERS | resend_invite | admin=%s customer=%s',
+                current_user.username, customer.username)
+    log_action(ACTION_UPDATE, 'User', customer.id, customer.username,
+               f'invite resent by {current_user.username}')
+
+    _send_invite_email(customer, token)
+    flash(f'Invitation email resent to {customer.email}.', 'success')
+    return redirect(url_for('customers.manage', customer_id=customer_id))
+
+
+# ── Public: set password via token ────────────────────────────────────────────
+
+@bp.route('/set-password/<token>', methods=['GET', 'POST'])
+def set_password(token):
+    """Public page — customer sets their password via the emailed link."""
+    from app.utils.forms import SetPasswordForm
+    user = User.verify_set_password_token(token)
+    if user is None:
+        flash(
+            'This password setup link is invalid or has expired. '
+            'Please contact your administrator to resend the invitation.',
+            'danger'
+        )
+        return redirect(url_for('auth.login'))
+
+    form = SetPasswordForm()
+    if form.validate_on_submit():
+        user.set_password(form.password.data)
+        user.password_set = True
+        user.clear_set_password_token()
+        db.session.commit()
+
+        logger.info('CUSTOMERS | password_set | user=%s', user.username)
+        log_action(ACTION_UPDATE, 'User', user.id, user.username,
+                   'customer completed password setup via invite link')
+
+        flash('Your password has been set successfully. You can now log in.', 'success')
+        return redirect(url_for('auth.login'))
+
+    return render_template('customers/set_password.html', form=form, user=user)
+
+
+# ── Edit customer ─────────────────────────────────────────────────────────────
 
 # ── Edit customer ─────────────────────────────────────────────────────────────
 

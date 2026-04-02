@@ -227,3 +227,26 @@ class CustomerUserForm(FlaskForm):
         """Password is required when creating a new account."""
         if self._user is None and not field.data:
             raise ValidationError('Password is required for new accounts.')
+
+class CustomerInviteForm(FlaskForm):
+    """Simplified form for creating a customer account via email invitation.
+
+    Only Full Name and Email are required — no username or password.
+    The username is auto-generated from the email address.
+    The customer sets their own password via the emailed link.
+    """
+    full_name = StringField('Full Name', validators=[DataRequired(), Length(max=150)])
+    email     = StringField('Email',     validators=[DataRequired(), Email(), Length(max=255)])
+
+    def validate_email(self, field):
+        from app.models.user import User
+        if User.query.filter_by(email=field.data).first():
+            raise ValidationError('An account with this email address already exists.')
+
+
+class SetPasswordForm(FlaskForm):
+    """Public form for customer to set their password via emailed link."""
+    password         = PasswordField('Password', validators=[DataRequired(), Length(min=8, max=100)])
+    confirm_password = PasswordField('Confirm Password',
+                                     validators=[DataRequired(),
+                                                 EqualTo('password', message='Passwords must match.')])

@@ -42,6 +42,13 @@ def login():
             if not user.active:
                 flash('Your account has been disabled. Please contact an administrator.', 'danger')
                 return render_template('auth/login.html', form=form)
+            if not user.password_set:
+                flash(
+                    'Your account password has not been set yet. '
+                    'Please check your email for the account setup link.',
+                    'warning'
+                )
+                return render_template('auth/login.html', form=form)
             login_user(user, remember=form.remember_me.data)
             # Use validated next URL — never redirect blindly to request.args['next']
             next_page = _safe_next(request.args.get('next'))

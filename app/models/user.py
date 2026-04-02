@@ -22,6 +22,14 @@ class User(UserMixin, db.Model):
     created_at    = db.Column(db.DateTime, default=now_eastern)
     active        = db.Column(db.Boolean, default=True, nullable=False)
 
+    # ── Customer password-setup workflow ──────────────────────────────────
+    # password_set: False for newly created customer accounts until they
+    #               complete the set-password flow via emailed link.
+    #               Always True for internal users created via UserForm.
+    password_set                = db.Column(db.Boolean, nullable=False, default=True)
+    set_password_token          = db.Column(db.String(64), nullable=True, index=True)
+    set_password_token_expires  = db.Column(db.DateTime, nullable=True)
+
     # Relationships
     inspections = db.relationship('Inspection', backref='inspector', lazy='dynamic')
 
@@ -42,6 +50,33 @@ class User(UserMixin, db.Model):
     def display_name(self):
         """Return full name if set, otherwise fall back to username."""
         return self.full_name.strip() if self.full_name and self.full_name.strip() else self.username
+
+    def generate_set_password_token(self, expires_hours=72):
+        """Create a one-time set-password token valid for `expires_hours` hours."""
+        import secrets
+        from datetime import timedelta
+        self.set_password_token         = secrets.token_hex(32)   # 64 hex chars
+        self.set_password_token_expires = now_eastern() + timedelta(hours=expires_hours)
+        return self.set_password_token
+
+    def clear_set_password_token(self):
+        """Invalidate the token after use."""
+        self.set_password_token         = None
+        self.set_password_token_expires = None
+
+    @staticmethod
+    def verify_set_password_token(token):
+        """Return the User whose token matches, or None if invalid/expired."""
+        if not token:
+            return None
+        user = User.query.filter_by(set_password_token=token).first()
+        if user is None:
+            return None
+        if user.set_password_token_expires is None:
+            return None
+        if now_eastern() > user.set_password_token_expires:
+            return None
+        return user
 
     def __repr__(self):
         return f'<User {self.username}>'
