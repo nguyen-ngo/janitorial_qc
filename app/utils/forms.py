@@ -55,7 +55,6 @@ class UserForm(FlaskForm):
         ('supervisor', 'Supervisor'),
         ('inspector', 'Inspector'),
         ('project_manager', 'Project Manager'),
-        ('customer', 'Customer'),
     ], validators=[DataRequired()])
 
     def __init__(self, user=None, *args, **kwargs):

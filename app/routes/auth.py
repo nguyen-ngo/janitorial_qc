@@ -129,7 +129,15 @@ def profile():
 @login_required
 @admin_required
 def list_users():
-    users = User.query.order_by(User.created_at.desc()).all()
+    # Exclude customer accounts — those are managed exclusively via /customers
+    users = (
+        User.query
+        .filter(User.role != 'customer')
+        .order_by(User.created_at.desc())
+        .all()
+    )
+    logger.info('AUTH | list_users | admin=%s | internal_users_count=%s',
+                current_user.username, len(users))
     return render_template('auth/users.html', users=users)
 
 
