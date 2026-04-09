@@ -86,7 +86,7 @@
 
                     <dt class="col-sm-4 text-muted">Role at Time</dt>
                     <dd class="col-sm-8">
-                        <span class="badge bg-{% if entry.user_role == 'admin' %}danger{% elif entry.user_role == 'supervisor' %}warning{% else %}info{% endif %}">
+                        <span class="badge bg-{% if entry.user_role == 'admin' %}danger{% elif entry.user_role == 'director' %}warning{% else %}info{% endif %}">
                             {{ entry.user_role | title }}
                         </span>
                     </dd>

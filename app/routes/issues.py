@@ -114,7 +114,7 @@ def view(issue_id):
             return redirect(url_for('issues.index'))
 
     form  = IssueUpdateForm(obj=issue)
-    staff = User.query.filter(User.role.in_(['supervisor','inspector'])).order_by(User.username).all()
+    staff = User.query.filter(User.role.in_(['director','inspector'])).order_by(User.username).all()
     form.assigned_to.choices = [(0, '— Unassigned —')] + [(u.id, u.username) for u in staff]
     form.status.data = form.status.data or issue.status
 
@@ -124,7 +124,7 @@ def view(issue_id):
 
         issue.status = form.status.data
 
-        if current_user.role in ['admin', 'supervisor']:
+        if current_user.role in ['admin', 'director']:
             issue.assigned_to = form.assigned_to.data or None
 
         if form.status.data == 'resolved' and not issue.resolved_at:
@@ -353,7 +353,7 @@ def unfollow(issue_id):
 def create():
     form  = IssueForm()
     areas = Area.query.join(Facility).filter(Facility.active == True).order_by(Facility.name, Area.name).all()
-    staff = User.query.filter(User.role.in_(['supervisor','inspector'])).order_by(User.username).all()
+    staff = User.query.filter(User.role.in_(['director','inspector'])).order_by(User.username).all()
 
     form.area_id.choices     = [(a.id, f"{a.facility.name} — {a.name}") for a in areas]
     form.assigned_to.choices = [(0, '— Unassigned —')] + [(u.id, u.username) for u in staff]
@@ -460,16 +460,16 @@ def verify(issue_id):
 @bp.route('/<int:issue_id>/request-verification', methods=['POST'])
 @login_required
 def request_verification(issue_id):
-    """Inspector/assignee marks the issue as pending supervisor verification."""
+    """Inspector/assignee marks the issue as pending director verification."""
     issue = Issue.query.get_or_404(issue_id)
 
     if current_user.role == 'customer':
         flash('Access denied.', 'danger')
         return redirect(url_for('issues.index'))
 
-    # Only the assignee, supervisor, or admin can request verification
+    # Only the assignee, director, or admin can request verification
     can_act = (
-        current_user.role in ['admin', 'supervisor']
+        current_user.role in ['admin', 'director']
         or issue.assigned_to == current_user.id
     )
     if not can_act:
@@ -556,7 +556,7 @@ def verification_queue():
 def delete(issue_id):
     """Permanently delete an issue and its associated photos.
 
-    Restricted to admin and supervisor roles.  The deletion is recorded in
+    Restricted to admin and director roles.  The deletion is recorded in
     the audit log before the record is removed so there is always a trace.
     """
     issue = Issue.query.get_or_404(issue_id)

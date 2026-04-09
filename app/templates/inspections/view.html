@@ -356,7 +356,7 @@
         <i class="bi bi-arrow-repeat"></i> Re-inspect
       </a>
       {% endif %}
-      {% if current_user.role in ['admin','supervisor'] %}
+      {% if current_user.role in ['admin','director'] %}
       {% if not inspection.follow_up_required %}
       <button type="button" class="btn btn-sm btn-outline-warning"
               data-bs-toggle="modal" data-bs-target="#followupModal"

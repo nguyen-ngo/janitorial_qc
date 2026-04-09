@@ -28,8 +28,8 @@
                 <p class="text-muted mb-1" style="font-size:.85rem;">@{{ current_user.username }}</p>
                 {% endif %}
                 <p class="text-muted mb-2">{{ current_user.email }}</p>
-                <span class="badge fs-6 bg-{% if current_user.role == 'admin' %}danger{% elif current_user.role == 'supervisor' %}warning{% else %}info{% endif %}">
-                    <i class="bi bi-{% if current_user.role == 'admin' %}shield-fill{% elif current_user.role == 'supervisor' %}star-fill{% else %}person-badge-fill{% endif %} me-1"></i>
+                <span class="badge fs-6 bg-{% if current_user.role == 'admin' %}danger{% elif current_user.role == 'director' %}warning{% else %}info{% endif %}">
+                    <i class="bi bi-{% if current_user.role == 'admin' %}shield-fill{% elif current_user.role == 'director' %}star-fill{% else %}person-badge-fill{% endif %} me-1"></i>
                     {{ current_user.role | title }}
                 </span>
                 <hr>

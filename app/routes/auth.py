@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 from app import db
 from app.models.user import User
 from app.utils.forms import LoginForm, UserForm, ProfileForm
-from app.utils.decorators import admin_required
+from app.utils.decorators import admin_required, supervisor_required
 import logging
 from app.utils.audit import log_action, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE, ACTION_LOGIN, ACTION_LOGOUT
 
@@ -127,7 +127,7 @@ def profile():
 
 @bp.route('/users')
 @login_required
-@admin_required
+@supervisor_required
 def list_users():
     # Exclude customer accounts — those are managed exclusively via /customers
     users = (
@@ -143,7 +143,7 @@ def list_users():
 
 @bp.route('/users/new', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@supervisor_required
 def create_user():
     form = UserForm()
 
@@ -169,7 +169,7 @@ def create_user():
 
 @bp.route('/users/<int:user_id>/edit', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@supervisor_required
 def edit_user(user_id):
     user = User.query.get_or_404(user_id)
     form = UserForm(user=user, obj=user)
@@ -196,7 +196,7 @@ def edit_user(user_id):
 
 @bp.route('/users/<int:user_id>/delete', methods=['POST'])
 @login_required
-@admin_required
+@supervisor_required
 def delete_user(user_id):
     user = User.query.get_or_404(user_id)
 
@@ -227,7 +227,7 @@ def delete_user(user_id):
 
 @bp.route('/users/<int:user_id>/toggle-active', methods=['POST'])
 @login_required
-@admin_required
+@supervisor_required
 def toggle_active(user_id):
     user = User.query.get_or_404(user_id)
 

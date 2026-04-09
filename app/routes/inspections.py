@@ -673,7 +673,7 @@ def flag_issue(inspection_id):
 
     form  = IssueForm()
     areas = Area.query.filter_by(facility_id=inspection.facility_id).order_by(Area.name).all()
-    staff = User.query.filter(User.role.in_(['supervisor', 'inspector'])).order_by(User.username).all()
+    staff = User.query.filter(User.role.in_(['director', 'inspector'])).order_by(User.username).all()
 
     form.area_id.choices     = [(a.id, a.name) for a in areas]
     form.assigned_to.choices = [(0, '— Unassigned —')] + [(u.id, u.username) for u in staff]

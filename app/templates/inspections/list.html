@@ -83,7 +83,7 @@
               {% else %}
               <a href="{{ url_for('inspections.view', inspection_id=ins.id) }}" class="btn btn-sm btn-outline-secondary">View</a>
               {% endif %}
-              {% if current_user.role in ['admin', 'supervisor'] %}
+              {% if current_user.role in ['admin', 'director'] %}
               <button type="button"
                       class="btn btn-sm btn-outline-danger ms-1"
                       data-bs-toggle="modal"
@@ -121,7 +121,7 @@
     {% endif %}
   </div>
 </div>
-{% if current_user.role in ['admin', 'supervisor'] %}
+{% if current_user.role in ['admin', 'director'] %}
 <!-- Delete Inspection Confirmation Modal -->
 <div class="modal fade" id="deleteInspectionModal" tabindex="-1" aria-labelledby="deleteInspectionModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
@@ -155,7 +155,7 @@
 {% endblock %}
 
 {% block extra_js %}
-{% if current_user.role in ['admin', 'supervisor'] %}
+{% if current_user.role in ['admin', 'director'] %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   const modal = document.getElementById('deleteInspectionModal');

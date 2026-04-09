@@ -51,10 +51,11 @@ class UserForm(FlaskForm):
     password        = PasswordField('Password', validators=[Optional(), Length(min=6, max=100)])
     confirm_password = PasswordField('Confirm Password', validators=[Optional(), EqualTo('password')])
     role            = SelectField('Role', choices=[
-        ('admin', 'Administrator'),
-        ('supervisor', 'Supervisor'),
-        ('inspector', 'Inspector'),
+        ('admin',           'Administrator'),
+        ('director',        'Director'),
+        ('inspector',       'Inspector'),
         ('project_manager', 'Project Manager'),
+        # 'customer' is intentionally excluded — customer accounts are managed via /customers
     ], validators=[DataRequired()])
 
     def __init__(self, user=None, *args, **kwargs):

@@ -12,20 +12,27 @@ def admin_required(f):
     return decorated_function
 
 def supervisor_required(f):
+    """Grants access to admin and director roles.
+
+    The decorator is intentionally kept as 'supervisor_required' so that all
+    existing route decorators (@supervisor_required) continue to work without
+    any changes to the route files.  The access list now reflects the renamed
+    Director role instead of the retired Supervisor role.
+    """
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if not current_user.is_authenticated or current_user.role not in ['admin', 'supervisor']:
-            flash('Supervisor access required.', 'danger')
+        if not current_user.is_authenticated or current_user.role not in ['admin', 'director']:
+            flash('Director access required.', 'danger')
             return redirect(url_for('dashboard.index'))
         return f(*args, **kwargs)
     return decorated_function
 
 def project_manager_required(f):
-    """Grants access to admin, supervisor, and project_manager roles."""
+    """Grants access to admin, director, and project_manager roles."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated or current_user.role not in [
-            'admin', 'supervisor', 'project_manager'
+            'admin', 'director', 'project_manager'
         ]:
             flash('Project Manager access required.', 'danger')
             return redirect(url_for('dashboard.index'))
@@ -35,7 +42,7 @@ def project_manager_required(f):
 def customer_required(f):
     """Restricts access to customer-role users only.
 
-    Internal staff (admin, supervisor, inspector, project_manager) should
+    Internal staff (admin, director, inspector, project_manager) should
     never be routed through customer-scoped views — use their own routes.
     """
     @wraps(f)

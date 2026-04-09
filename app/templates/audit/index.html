@@ -109,7 +109,7 @@
                             <strong>{{ entry.username }}</strong>
                         </td>
                         <td>
-                            <span class="badge bg-{% if entry.user_role == 'admin' %}danger{% elif entry.user_role == 'supervisor' %}warning{% else %}info{% endif %} bg-opacity-75">
+                            <span class="badge bg-{% if entry.user_role == 'admin' %}danger{% elif entry.user_role == 'director' %}warning{% else %}info{% endif %} bg-opacity-75">
                                 {{ entry.user_role | title }}
                             </span>
                         </td>

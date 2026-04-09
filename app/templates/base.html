@@ -101,7 +101,7 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('dashboard.index') }}">Dashboard</a>
                     </li>
-                    {% if current_user.role in ['admin', 'supervisor', 'project_manager'] %}
+                    {% if current_user.role in ['admin', 'director', 'project_manager'] %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('projects.index') }}">Projects</a>
                     </li>
@@ -109,7 +109,7 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('facilities.list_facilities') }}">Facilities</a>
                     </li>
-                    {% if current_user.role != 'customer' %}
+                    {% if current_user.role in ['admin', 'director'] %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('templates.index') }}">Templates</a>
                     </li>
@@ -120,7 +120,7 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('reports.index') }}">Reports</a>
                     </li>
-                    {% if current_user.role in ['admin', 'supervisor'] %}
+                    {% if current_user.role in ['admin', 'director'] %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('scheduled_reports.index') }}">Scheduled Reports</a>
                     </li>
@@ -128,7 +128,7 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('issues.index') }}">Issues</a>
                     </li>
-                    {% if current_user.role in ['admin', 'supervisor'] %}
+                    {% if current_user.role in ['admin', 'director'] %}
                     <li class="nav-item">
                         <a class="nav-link d-flex align-items-center gap-1"
                            href="{{ url_for('issues.verification_queue') }}">
@@ -142,13 +142,15 @@
                         </a>
                     </li>
                     {% endif %}
-                    {% if current_user.role == 'admin' %}
+                    {% if current_user.role in ['admin', 'director'] %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('auth.list_users') }}">Users</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('customers.index') }}">Customers</a>
                     </li>
+                    {% endif %}
+                    {% if current_user.role == 'admin' %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('audit.index') }}">Audit Trail</a>
                     </li>

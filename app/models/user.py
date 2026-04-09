@@ -16,7 +16,10 @@ class User(UserMixin, db.Model):
     email         = db.Column(db.String(255), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
     role          = db.Column(
-        db.Enum('admin', 'supervisor', 'inspector', 'project_manager', 'customer'),
+        # 'supervisor' retained temporarily so the Enum is valid before the
+        # migration UPDATE runs.  The migration removes it after all rows are
+        # updated to 'director'.
+        db.Enum('admin', 'supervisor', 'director', 'inspector', 'project_manager', 'customer'),
         nullable=False
     )
     created_at    = db.Column(db.DateTime, default=now_eastern)

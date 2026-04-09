@@ -8,7 +8,7 @@
         <h2><i class="bi bi-file-earmark-text"></i> Inspection Templates</h2>
     </div>
     <div class="col-md-6 text-end">
-        {% if current_user.role in ['admin', 'supervisor'] %}
+        {% if current_user.role in ['admin', 'director'] %}
         <a href="{{ url_for('templates.create_template') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle"></i> Create Template
         </a>
@@ -41,7 +41,7 @@
                     <i class="bi bi-eye"></i> View
                 </a>
 
-                {% if current_user.role in ['admin', 'supervisor'] %}
+                {% if current_user.role in ['admin', 'director'] %}
                 <!-- Rename -->
                 <button type="button"
                         class="btn btn-sm btn-outline-secondary"
@@ -90,7 +90,7 @@
     {% endfor %}
 </div>
 
-{% if current_user.role in ['admin', 'supervisor'] %}
+{% if current_user.role in ['admin', 'director'] %}
 <!-- Edit Template Modal -->
 <div class="modal fade" id="renameModal" tabindex="-1" aria-labelledby="renameModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -190,7 +190,7 @@
 {% endblock %}
 
 {% block extra_js %}
-{% if current_user.role in ['admin', 'supervisor'] %}
+{% if current_user.role in ['admin', 'director'] %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     // Edit template modal

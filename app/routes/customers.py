@@ -20,7 +20,7 @@ from app.models.user import User
 from app.models.project import Project, CustomerAssignment
 from app.models.facility import Facility
 from app.utils.forms import CustomerUserForm, CustomerAssignmentForm, CustomerInviteForm, SetPasswordForm
-from app.utils.decorators import admin_required
+from app.utils.decorators import admin_required, supervisor_required
 from app.utils.audit import log_action, ACTION_CREATE, ACTION_UPDATE, ACTION_DELETE
 from app.utils.scope import get_customer_scope
 
@@ -33,7 +33,7 @@ bp = Blueprint('customers', __name__, url_prefix='/customers')
 
 @bp.route('/')
 @login_required
-@admin_required
+@supervisor_required
 def index():
     """Consolidated customer management dashboard."""
     customers = (
@@ -101,7 +101,7 @@ def index():
 
 @bp.route('/new', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@supervisor_required
 def create():
     """Create a customer account via email invitation.
 
@@ -235,7 +235,7 @@ def _send_invite_email(user, token):
 
 @bp.route('/<int:customer_id>/resend-invite', methods=['POST'])
 @login_required
-@admin_required
+@supervisor_required
 def resend_invite(customer_id):
     """Generate a fresh token and resend the set-password invitation email."""
     customer = User.query.get_or_404(customer_id)
@@ -295,7 +295,7 @@ def set_password(token):
 
 @bp.route('/<int:customer_id>/edit', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@supervisor_required
 def edit(customer_id):
     customer = User.query.get_or_404(customer_id)
     if customer.role != 'customer':
@@ -326,7 +326,7 @@ def edit(customer_id):
 
 @bp.route('/<int:customer_id>')
 @login_required
-@admin_required
+@supervisor_required
 def manage(customer_id):
     """Single-customer detail page: profile + all assignments."""
     customer = User.query.get_or_404(customer_id)
@@ -363,7 +363,7 @@ def manage(customer_id):
 
 @bp.route('/<int:customer_id>/assignments/add', methods=['POST'])
 @login_required
-@admin_required
+@supervisor_required
 def add_assignment(customer_id):
     customer = User.query.get_or_404(customer_id)
     if customer.role != 'customer':
@@ -412,7 +412,7 @@ def add_assignment(customer_id):
 
 @bp.route('/assignments/<int:assignment_id>/remove', methods=['POST'])
 @login_required
-@admin_required
+@supervisor_required
 def remove_assignment(assignment_id):
     assignment  = CustomerAssignment.query.get_or_404(assignment_id)
     customer_id = assignment.user_id
@@ -437,7 +437,7 @@ def remove_assignment(assignment_id):
 
 @bp.route('/<int:customer_id>/toggle-active', methods=['POST'])
 @login_required
-@admin_required
+@supervisor_required
 def toggle_active(customer_id):
     customer = User.query.get_or_404(customer_id)
     if customer.role != 'customer':
@@ -463,7 +463,7 @@ def toggle_active(customer_id):
 
 @bp.route('/import/template')
 @login_required
-@admin_required
+@supervisor_required
 def import_template():
     """Download a blank CSV template showing the expected import format."""
     import csv, io
@@ -495,7 +495,7 @@ def import_template():
 
 @bp.route('/import', methods=['GET', 'POST'])
 @login_required
-@admin_required
+@supervisor_required
 def bulk_import():
     """Two-phase CSV import for customer accounts.
 
@@ -744,7 +744,7 @@ def bulk_import():
 
 @bp.route('/facilities-for-project/<int:project_id>')
 @login_required
-@admin_required
+@supervisor_required
 def facilities_for_project(project_id):
     from flask import jsonify
     project    = Project.query.get_or_404(project_id)

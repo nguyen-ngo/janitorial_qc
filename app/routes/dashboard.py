@@ -24,7 +24,7 @@ def index():
     thirty_days_ago = now - timedelta(days=30)
 
     is_inspector      = current_user.role == 'inspector'
-    is_privileged     = current_user.role in ['admin', 'supervisor']
+    is_privileged     = current_user.role in ['admin', 'director']
     is_customer       = current_user.role == 'customer'
     is_project_manager = current_user.role == 'project_manager'
 
@@ -107,7 +107,7 @@ def index():
             followup_q = followup_q.filter(False)
     pending_followups = followup_q.count()
 
-    # ── System stats (admin/supervisor) ───────────────────────────────────
+    # ── System stats (admin/director) ────────────────────────────────────────
     total_facilities = Facility.query.filter_by(active=True).count() if is_privileged else 0
     total_templates  = InspectionTemplate.query.count()               if is_privileged else 0
     total_users      = User.query.count()                             if current_user.role == 'admin' else 0

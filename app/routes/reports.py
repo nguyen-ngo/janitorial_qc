@@ -38,8 +38,8 @@ def _date_range():
 @bp.route('/')
 @login_required
 def index():
-    # Customers get a scoped view; internal staff need supervisor+ access
-    if current_user.role not in ['admin', 'supervisor', 'project_manager', 'customer']:
+    # Customers get a scoped view; internal staff need director+ access
+    if current_user.role not in ['admin', 'director', 'project_manager', 'customer']:
         from flask import flash, redirect, url_for
         flash('Access denied.', 'danger')
         return redirect(url_for('dashboard.index'))
@@ -179,7 +179,7 @@ def index():
 @bp.route('/facility/<int:facility_id>')
 @login_required
 def facility_report(facility_id):
-    if current_user.role not in ['admin', 'supervisor', 'project_manager', 'customer']:
+    if current_user.role not in ['admin', 'director', 'project_manager', 'customer']:
         from flask import flash, redirect, url_for
         flash('Access denied.', 'danger')
         return redirect(url_for('dashboard.index'))
@@ -228,7 +228,7 @@ def facility_report(facility_id):
 def facility_scorecard(facility_id):
     """Comprehensive per-facility scorecard: score trend, SLA compliance,
     issue breakdown by severity, inspection frequency."""
-    if current_user.role not in ['admin', 'supervisor', 'project_manager', 'customer']:
+    if current_user.role not in ['admin', 'director', 'project_manager', 'customer']:
         from flask import flash, redirect, url_for
         flash('Access denied.', 'danger')
         return redirect(url_for('dashboard.index'))

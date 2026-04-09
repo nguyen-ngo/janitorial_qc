@@ -511,7 +511,7 @@ def notify_by_matrix(
 
     role_to_db = {
         'admin':           'admin',
-        'supervisor':      'supervisor',
+        'director':        'director',
         'inspector':       'inspector',
         'project_manager': 'project_manager',
         'customer':        'customer',

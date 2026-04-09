@@ -8,7 +8,7 @@ One row per (event_type, role_key) pair.
 role_key values
 ---------------
 admin            — all users with role='admin'
-supervisor       — all users with role='supervisor'
+director         — all users with role='director'
 inspector        — all users with role='inspector'
 project_manager  — all users with role='project_manager'
 customer         — all customer-portal users assigned to the relevant facility
@@ -18,16 +18,16 @@ custom           — free-form extra email addresses stored in custom_emails JSO
 
 Default matrix (mirrors current hardcoded behaviour)
 -----------------------------------------------------
-inspection_completed     : admin ✓  supervisor ✓  inspector ✗  pm ✗  customer ✓
-issue_assigned           : admin ✗  supervisor ✗  inspector ✗  pm ✗  customer ✗  (assignee implicit)
-issue_status             : admin ✗  supervisor ✗  inspector ✗  pm ✗  customer ✗  (assignee implicit)
-issue_comment            : admin ✗  supervisor ✗  inspector ✗  pm ✗  customer ✗  (assignee implicit)
-issue_follow_update      : admin ✗  supervisor ✗  inspector ✗  pm ✗  customer ✗  (followers implicit)
-issue_flagged            : admin ✗  supervisor ✗  inspector ✗  pm ✗  customer ✓  (assignee implicit)
-issue_created            : admin ✗  supervisor ✗  inspector ✗  pm ✗  customer ✓  (assignee implicit)
-issue_updated_customer   : admin ✗  supervisor ✗  inspector ✗  pm ✗  customer ✓
-verification_requested   : admin ✓  supervisor ✓  inspector ✗  pm ✗  customer ✗
-sla_alert                : admin ✓  supervisor ✗  inspector ✗  pm ✗  customer ✗  (assignee + followers implicit)
+inspection_completed     : admin ✓  director  ✓  inspector ✗  pm ✗  customer ✓
+issue_assigned           : admin ✗  director  ✗  inspector ✗  pm ✗  customer ✗  (assignee implicit)
+issue_status             : admin ✗  director  ✗  inspector ✗  pm ✗  customer ✗  (assignee implicit)
+issue_comment            : admin ✗  director  ✗  inspector ✗  pm ✗  customer ✗  (assignee implicit)
+issue_follow_update      : admin ✗  director  ✗  inspector ✗  pm ✗  customer ✗  (followers implicit)
+issue_flagged            : admin ✗  director  ✗  inspector ✗  pm ✗  customer ✓  (assignee implicit)
+issue_created            : admin ✗  director  ✗  inspector ✗  pm ✗  customer ✓  (assignee implicit)
+issue_updated_customer   : admin ✗  director  ✗  inspector ✗  pm ✗  customer ✓
+verification_requested   : admin ✓  director  ✓  inspector ✗  pm ✗  customer ✗
+sla_alert                : admin ✓  director  ✗  inspector ✗  pm ✗  customer ✗  (assignee + followers implicit)
 """
 
 import json
@@ -36,7 +36,7 @@ from app import db
 # Role keys available in the matrix UI
 MATRIX_ROLES = [
     ('admin',           'Admin'),
-    ('supervisor',      'Supervisor'),
+    ('director',        'Director'),
     ('inspector',       'Inspector'),
     ('project_manager', 'Project Manager'),
     ('customer',        'Customer'),
@@ -65,84 +65,84 @@ MATRIX_EVENTS = {
 MATRIX_DEFAULTS = {
     # inspection_completed
     ('inspection_completed',   'admin'):           True,
-    ('inspection_completed',   'supervisor'):      True,
+    ('inspection_completed',   'director'):      True,
     ('inspection_completed',   'inspector'):       False,
     ('inspection_completed',   'project_manager'): False,
     ('inspection_completed',   'customer'):        True,
     ('inspection_completed',   'custom'):          False,
     # issue_assigned (assignee is always notified implicitly)
     ('issue_assigned',         'admin'):           False,
-    ('issue_assigned',         'supervisor'):      False,
+    ('issue_assigned',         'director'):      False,
     ('issue_assigned',         'inspector'):       False,
     ('issue_assigned',         'project_manager'): False,
     ('issue_assigned',         'customer'):        False,
     ('issue_assigned',         'custom'):          False,
     # issue_reassigned
     ('issue_reassigned',       'admin'):           False,
-    ('issue_reassigned',       'supervisor'):      False,
+    ('issue_reassigned',       'director'):      False,
     ('issue_reassigned',       'inspector'):       False,
     ('issue_reassigned',       'project_manager'): False,
     ('issue_reassigned',       'customer'):        False,
     ('issue_reassigned',       'custom'):          False,
     # issue_unassigned
     ('issue_unassigned',       'admin'):           False,
-    ('issue_unassigned',       'supervisor'):      False,
+    ('issue_unassigned',       'director'):      False,
     ('issue_unassigned',       'inspector'):       False,
     ('issue_unassigned',       'project_manager'): False,
     ('issue_unassigned',       'customer'):        False,
     ('issue_unassigned',       'custom'):          False,
     # issue_status
     ('issue_status',           'admin'):           False,
-    ('issue_status',           'supervisor'):      False,
+    ('issue_status',           'director'):      False,
     ('issue_status',           'inspector'):       False,
     ('issue_status',           'project_manager'): False,
     ('issue_status',           'customer'):        False,
     ('issue_status',           'custom'):          False,
     # issue_comment
     ('issue_comment',          'admin'):           False,
-    ('issue_comment',          'supervisor'):      False,
+    ('issue_comment',          'director'):      False,
     ('issue_comment',          'inspector'):       False,
     ('issue_comment',          'project_manager'): False,
     ('issue_comment',          'customer'):        False,
     ('issue_comment',          'custom'):          False,
     # issue_follow_update (followers always notified implicitly)
     ('issue_follow_update',    'admin'):           False,
-    ('issue_follow_update',    'supervisor'):      False,
+    ('issue_follow_update',    'director'):      False,
     ('issue_follow_update',    'inspector'):       False,
     ('issue_follow_update',    'project_manager'): False,
     ('issue_follow_update',    'customer'):        False,
     ('issue_follow_update',    'custom'):          False,
     # issue_flagged (from inspection)
     ('issue_flagged',          'admin'):           False,
-    ('issue_flagged',          'supervisor'):      False,
+    ('issue_flagged',          'director'):      False,
     ('issue_flagged',          'inspector'):       False,
     ('issue_flagged',          'project_manager'): False,
     ('issue_flagged',          'customer'):        True,
     ('issue_flagged',          'custom'):          False,
     # issue_created (standalone)
     ('issue_created',          'admin'):           False,
-    ('issue_created',          'supervisor'):      False,
+    ('issue_created',          'director'):      False,
     ('issue_created',          'inspector'):       False,
     ('issue_created',          'project_manager'): False,
     ('issue_created',          'customer'):        True,
     ('issue_created',          'custom'):          False,
     # issue_updated_customer
     ('issue_updated_customer', 'admin'):           False,
-    ('issue_updated_customer', 'supervisor'):      False,
+    ('issue_updated_customer', 'director'):      False,
     ('issue_updated_customer', 'inspector'):       False,
     ('issue_updated_customer', 'project_manager'): False,
     ('issue_updated_customer', 'customer'):        True,
     ('issue_updated_customer', 'custom'):          False,
     # verification_requested
     ('verification_requested', 'admin'):           True,
-    ('verification_requested', 'supervisor'):      True,
+    ('verification_requested', 'director'):      True,
     ('verification_requested', 'inspector'):       False,
     ('verification_requested', 'project_manager'): False,
     ('verification_requested', 'customer'):        False,
     ('verification_requested', 'custom'):          False,
     # sla_alert (assignee + followers always notified implicitly)
     ('sla_alert',              'admin'):           True,
-    ('sla_alert',              'supervisor'):      False,
+    ('sla_alert',              'director'):      False,
     ('sla_alert',              'inspector'):       False,
     ('sla_alert',              'project_manager'): False,
     ('sla_alert',              'customer'):        False,

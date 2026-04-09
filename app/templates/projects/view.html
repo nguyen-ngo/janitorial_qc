@@ -15,7 +15,7 @@
         {% endif %}
     </div>
     <div class="col-auto d-flex gap-2">
-        {% if current_user.role in ['admin', 'supervisor'] %}
+        {% if current_user.role in ['admin', 'director'] %}
         <a href="{{ url_for('projects.edit', project_id=project.id) }}" class="btn btn-outline-secondary">
             <i class="bi bi-pencil"></i> Edit
         </a>

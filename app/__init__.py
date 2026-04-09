@@ -99,9 +99,9 @@ def create_app(config_name='default'):
                 unread = Notification.query.filter_by(
                     user_id=current_user.id, is_read=False
                 ).count()
-                # Pending verification count — only computed for supervisor+ roles
+                # Pending verification count — only computed for director+ roles
                 pv_count = 0
-                if current_user.role in ('admin', 'supervisor'):
+                if current_user.role in ('admin', 'director'):
                     pv_count = Issue.query.filter_by(
                         status='pending_verification'
                     ).count()
